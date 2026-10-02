@@ -1,0 +1,10 @@
+{
+	"id": "pagina",
+	"name": "Pagina",
+	"version": "1.0.0",
+	"minAppVersion": "1.5.0",
+	"description": "Pagina: export notes to PDF on desktop and mobile, with page size, margins, headers, and footers.",
+	"author": "AceOfSpadesOmelette",
+	"authorUrl": "https://github.com/AceOfSpadesOmelette",
+	"isDesktopOnly": false
+}

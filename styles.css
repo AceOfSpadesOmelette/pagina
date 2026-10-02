@@ -1,0 +1,186 @@
+#pagina-export {
+	display: flex;
+	flex-direction: row;
+	height: 75vh;
+}
+
+#pagina-export .print-preview {
+	flex: 1;
+	overflow-x: hidden;
+	overflow-y: scroll;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-content: flex-start;
+	min-width: 0;
+}
+
+#pagina-export .setting-wrapper {
+	width: 320px;
+	margin-left: 16px;
+	overflow-y: auto;
+}
+
+#pagina-export .setting-wrapper .setting-item[hidden] {
+	display: none;
+}
+
+#pagina-export .print-preview > .preview-stage {
+	flex: 1;
+	height: 100%;
+	width: 100%;
+}
+
+#pagina-export .print-preview-container .print-preview-item {
+	border: 1px solid var(--background-modifier-border, #f2f2f2);
+	height: calc(var(--modal-scale) * 100%);
+	width: calc(var(--modal-scale) * 100%);
+	transform: scale(calc(1 / var(--modal-scale)), calc(1 / var(--modal-scale)));
+	transform-origin: top left;
+}
+
+#pagina-export .print-preview-item .pagina-print {
+	background: #ffffff;
+	color: #222222;
+	--text-normal: #222222;
+	--text-muted: #555555;
+	--text-faint: #888888;
+	--h1-color: var(--text-normal);
+	--h2-color: var(--text-normal);
+	--h3-color: var(--text-normal);
+	--h4-color: var(--text-normal);
+	--h5-color: var(--text-normal);
+	--h6-color: var(--text-normal);
+	--bold-color: var(--text-normal);
+	--italic-color: var(--text-normal);
+}
+
+#pagina-export .pdf-canvas-page {
+	width: 100%;
+	border: 1px solid var(--background-modifier-border);
+	margin-bottom: 8px;
+	background: #ffffff;
+}
+
+#pagina-export .pdf-canvas-page canvas {
+	width: 100% !important;
+	height: auto !important;
+	display: block;
+}
+
+#pagina-export .toggle-container {
+	display: flex;
+	gap: 0;
+	text-align: right;
+	justify-content: right;
+	position: absolute;
+	top: 0;
+	right: 0;
+	z-index: 99;
+}
+
+#pagina-export .toggle-container button {
+	height: 24px;
+	width: 56px;
+	padding: 2px 4px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	cursor: pointer;
+	border-radius: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	line-height: 14px;
+	gap: 2px;
+	font-size: 12px;
+}
+
+#pagina-export .toggle-container button:hover {
+	background: var(--background-modifier-hover);
+}
+
+#pagina-export .toggle-container button.active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+#pagina-export .icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+#pagina-export .rendering {
+	position: absolute;
+	top: 4px;
+	left: 8px;
+	z-index: 98;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+}
+
+#pagina-export .rendering .icon {
+	animation: pagina-spin 1s linear infinite;
+	max-width: 18px;
+	max-height: 18px;
+}
+
+#pagina-export .pagina-preview-error {
+	padding: 1rem;
+}
+
+.pagina-layout-warning {
+	color: var(--text-error);
+	font-size: 0.9em;
+	line-height: 1.4;
+	padding: 0.35rem 0.5rem 0.5rem 0;
+}
+
+#pagina-export .pagina-export-actions .setting-item {
+	border: none;
+}
+
+@keyframes pagina-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media print {
+	.print .markdown-preview-view {
+		height: auto !important;
+	}
+	.md-print-anchor,
+	.blockid {
+		white-space: pre !important;
+		border-left: none !important;
+		border-right: none !important;
+		border-top: none !important;
+		border-bottom: none !important;
+		display: inline-block !important;
+		position: absolute !important;
+		width: 1px !important;
+		height: 1px !important;
+		right: 0 !important;
+		outline: 0 !important;
+		background: 0 0 !important;
+		text-decoration: initial !important;
+		text-shadow: initial !important;
+	}
+	.print.pagina-print thead {
+		display: table-header-group;
+	}
+	.print.pagina-print tr,
+	.print.pagina-print img,
+	.print.pagina-print svg,
+	.print.pagina-print pre,
+	.print.pagina-print .mermaid,
+	.print.pagina-print .callout {
+		break-inside: avoid;
+		page-break-inside: avoid;
+	}
+}
