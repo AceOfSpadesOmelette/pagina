@@ -21,8 +21,64 @@
 	overflow-y: auto;
 }
 
+#pagina-export.pagina-export-mobile {
+	flex-direction: column;
+	height: min(85vh, 100%);
+	gap: 8px;
+}
+
+#pagina-export.pagina-export-mobile.pagina-no-preview .print-preview {
+	flex: 0 0 auto;
+	min-height: 0;
+	max-height: none;
+	overflow: visible;
+}
+
+#pagina-export.pagina-export-mobile .setting-wrapper {
+	width: 100%;
+	max-width: none;
+	margin-left: 0;
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding-bottom: 4.5rem;
+}
+
+#pagina-export.pagina-export-mobile .setting-item {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+}
+
+#pagina-export.pagina-export-mobile .setting-item-info {
+	width: 100%;
+}
+
+#pagina-export.pagina-export-mobile .setting-item-control {
+	width: 100%;
+	justify-content: flex-start;
+}
+
+#pagina-export.pagina-export-mobile .pagina-export-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
+	padding: 0.5rem 0 0.25rem;
+	background: var(--background-primary);
+	border-top: 1px solid var(--background-modifier-border);
+}
+
 #pagina-export .setting-wrapper .setting-item[hidden] {
 	display: none;
+}
+
+.pagina-preview-disabled {
+	padding: 24px;
+	text-align: center;
+	color: var(--text-muted);
+	font-size: 14px;
 }
 
 #pagina-export .print-preview > .preview-stage {
@@ -133,6 +189,12 @@
 	padding: 1rem;
 }
 
+#pagina-export .pagina-export-status {
+	padding: 0.35rem 0.5rem;
+	font-size: 0.85em;
+	color: var(--text-muted);
+}
+
 .pagina-layout-warning {
 	color: var(--text-error);
 	font-size: 0.9em;
@@ -142,6 +204,17 @@
 
 #pagina-export .pagina-export-actions .setting-item {
 	border: none;
+	padding: 0;
+}
+
+#pagina-export .pagina-export-actions .setting-item-control {
+	justify-content: stretch;
+	width: 100%;
+}
+
+#pagina-export .pagina-export-btn {
+	margin: 0;
+	width: 100%;
 }
 
 @keyframes pagina-spin {
@@ -151,6 +224,15 @@
 }
 
 @media print {
+	.print.pagina-print {
+		visibility: visible !important;
+		position: static !important;
+		left: auto !important;
+		top: auto !important;
+		z-index: auto !important;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
 	.print .markdown-preview-view {
 		height: auto !important;
 	}
@@ -171,6 +253,21 @@
 		text-decoration: initial !important;
 		text-shadow: initial !important;
 	}
+	.print.pagina-print table {
+		border-collapse: collapse;
+		width: 100%;
+		max-width: 100%;
+	}
+	.print.pagina-print table th,
+	.print.pagina-print table td {
+		white-space: normal;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+	}
+	.print.pagina-print table.pagina-table-compact th,
+	.print.pagina-print table.pagina-table-compact td {
+		padding: 2px 4px !important;
+	}
 	.print.pagina-print thead {
 		display: table-header-group;
 	}
@@ -179,8 +276,32 @@
 	.print.pagina-print svg,
 	.print.pagina-print pre,
 	.print.pagina-print .mermaid,
-	.print.pagina-print .callout {
+	.print.pagina-print .callout,
+	.print.pagina-print .pagina-table-fit {
 		break-inside: avoid;
 		page-break-inside: avoid;
+	}
+	.print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
+		break-before: page;
+		page-break-before: always;
+	}
+	.print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+		text-align: center;
+	}
+	.print.pagina-print.pagina-underline-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+		text-decoration: underline;
+	}
+	.print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
+		display: none !important;
+	}
+	.print.pagina-print .pagina-forced-break {
+		break-before: page;
+		page-break-before: always;
+		display: block;
+		height: 0;
+		margin: 0;
+		padding: 0;
+		border: none;
+		visibility: hidden;
 	}
 }

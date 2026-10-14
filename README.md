@@ -2,7 +2,9 @@
 
 Export an Obsidian note to PDF, with page size, margins, headers, and footers.
 
-Desktop export uses Obsidian's print-to-PDF path. Mobile export draws the pages in the plugin. Headers and footers can use the same font as the note, including a vault `@font-face`.
+Desktop export uses Obsidian's print-to-PDF path and can open a native Save dialog. Headers and footers can use the same font as the note, including a vault `@font-face`.
+
+**Mobile export is disabled** — it is not stable enough yet. Pagina is marked desktop-only until that path is ready.
 
 ## Install
 
@@ -52,3 +54,15 @@ npm run build
 ```
 
 `npm run build` typechecks the source and writes `main.js`. The woff2 files are not produced by the build; keep them next to `main.js`.
+
+
+
+## Develop
+
+```bash
+npm install
+npm run build
+npm test
+```
+
+CI runs build + Jest on push/PR. Tag a version matching `manifest.json` (for example `1.0.0`) to create a draft GitHub release with `main.js`, `manifest.json`, and `styles.css` when present.

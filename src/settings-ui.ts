@@ -2,6 +2,7 @@ import { Setting } from "obsidian";
 import { HEADER_BORDERS, type HeaderBorderStyle } from "./header-borders";
 import { obsidianFontLabel } from "./electron-pdf";
 import { layoutWarning, MARGIN_OPTIONS, PAGE_SIZE_OPTIONS } from "./page-presets";
+import { isPhoneSession } from "./session";
 import { DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
@@ -30,6 +31,8 @@ export function renderPaginaSettings(
 	};
 	refreshWarning();
 
+	new Setting(container).setName("Document").setHeading();
+
 	new Setting(container)
 		.setName("Include file name as title")
 		.setDesc("Center the note name at the top of the export.")
@@ -39,6 +42,40 @@ export function renderPaginaSettings(
 				notify();
 			}),
 		);
+
+	new Setting(container).setName("Heading 1").setHeading();
+
+	new Setting(container)
+		.setName("Page break before H1")
+		.setDesc("Start a new page at each heading 1 after the first (not the file-name title).")
+		.addToggle((t) =>
+			t.setValue(settings.pageBreakBeforeH1).onChange((v) => {
+				settings.pageBreakBeforeH1 = v;
+				notify();
+			}),
+		);
+
+	new Setting(container)
+		.setName("Center H1")
+		.setDesc("Horizontally center heading 1 text (not the file-name title).")
+		.addToggle((t) =>
+			t.setValue(settings.centerH1).onChange((v) => {
+				settings.centerH1 = v;
+				notify();
+			}),
+		);
+
+	new Setting(container)
+		.setName("Underline H1")
+		.setDesc("Underline heading 1 text (not the file-name title).")
+		.addToggle((t) =>
+			t.setValue(settings.underlineH1).onChange((v) => {
+				settings.underlineH1 = v;
+				notify();
+			}),
+		);
+
+	new Setting(container).setName("Page").setHeading();
 
 	new Setting(container)
 		.setName("Page size")
@@ -148,6 +185,20 @@ export function renderPaginaSettings(
 			}),
 		);
 
+	new Setting(container).setName("PDF").setHeading();
+
+	if (!isPhoneSession()) {
+		new Setting(container)
+			.setName("Enable PDF preview")
+			.setDesc("Show PDF preview in the export dialog. Turn off to open the dialog immediately on slow devices.")
+			.addToggle((t) =>
+				t.setValue(settings.enablePreview).onChange((v) => {
+					settings.enablePreview = v;
+					notify();
+				}),
+			);
+	}
+
 	new Setting(container)
 		.setName("Print background")
 		.setDesc("Whether to print background graphics")
@@ -208,6 +259,8 @@ export function renderPaginaSettings(
 			});
 		});
 
+	new Setting(container).setName("Header").setHeading();
+
 	new Setting(container)
 		.setName("Display header")
 		.setDesc(VARIABLE_HINT)
@@ -223,6 +276,8 @@ export function renderPaginaSettings(
 		addSlotSettings(container, "Header", settings.header, notify);
 	}
 
+	new Setting(container).setName("Footer").setHeading();
+
 	new Setting(container)
 		.setName("Display footer")
 		.setDesc(VARIABLE_HINT)
@@ -237,6 +292,8 @@ export function renderPaginaSettings(
 	if (settings.displayFooter) {
 		addSlotSettings(container, "Footer", settings.footer, notify);
 	}
+
+	new Setting(container).setName("Output").setHeading();
 
 	new Setting(container)
 		.setName("Open after export")

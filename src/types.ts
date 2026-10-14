@@ -38,6 +38,12 @@ export type TimestampFormat = "none" | "EPOCH" | "YYYYMMDD" | "YYYY-MM-DD" | "YY
 
 export interface PaginaSettings {
 	includeFileNameAsTitle: boolean;
+	/** Start a new PDF page at each body H1 (excludes the file-name title). */
+	pageBreakBeforeH1: boolean;
+	/** Horizontally center body H1s in the PDF (excludes the file-name title). */
+	centerH1: boolean;
+	/** Underline body H1s in the PDF (excludes the file-name title). */
+	underlineH1: boolean;
 	pageSize: string;
 	customPageWidthMm: number;
 	customPageHeightMm: number;
@@ -58,10 +64,15 @@ export interface PaginaSettings {
 	maxHeadingLevel: MaxHeadingLevel;
 	pdfMetadata: boolean;
 	timestampFormat: TimestampFormat;
+	/** Show a PDF preview in the export dialog. Off skips the slow raster on phones. */
+	enablePreview: boolean;
 }
 
 export const DEFAULT_SETTINGS: PaginaSettings = {
 	includeFileNameAsTitle: true,
+	pageBreakBeforeH1: false,
+	centerH1: false,
+	underlineH1: false,
 	pageSize: "A4",
 	customPageWidthMm: 210,
 	customPageHeightMm: 297,
@@ -100,6 +111,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 	maxHeadingLevel: "6",
 	pdfMetadata: true,
 	timestampFormat: "none",
+	enablePreview: true,
 };
 
 export function normalizeSettings(raw: unknown): PaginaSettings {
@@ -120,9 +132,13 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 			200,
 		),
 		maxHeadingLevel,
+		pageBreakBeforeH1: data.pageBreakBeforeH1 ?? DEFAULT_SETTINGS.pageBreakBeforeH1,
+		centerH1: data.centerH1 ?? DEFAULT_SETTINGS.centerH1,
+		underlineH1: data.underlineH1 ?? DEFAULT_SETTINGS.underlineH1,
 		printBackground: data.printBackground ?? DEFAULT_SETTINGS.printBackground,
 		generateTaggedPDF: data.generateTaggedPDF ?? DEFAULT_SETTINGS.generateTaggedPDF,
 		pdfMetadata: data.pdfMetadata ?? DEFAULT_SETTINGS.pdfMetadata,
+		enablePreview: data.enablePreview ?? DEFAULT_SETTINGS.enablePreview,
 		timestampFormat: (["none", "EPOCH", "YYYYMMDD", "YYYY-MM-DD", "YYYYMMDD-HHMMSS"].includes(
 			String(data.timestampFormat),
 		)

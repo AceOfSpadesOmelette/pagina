@@ -1,14 +1,19 @@
 import { MarkdownView, Menu, Notice, Plugin, TFile } from "obsidian";
 import { PaginaExportModal } from "./export-modal";
+import { isPhoneSession } from "./session";
 import { PaginaSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, normalizeSettings, type PaginaSettings } from "./types";
 import { usePluginFontDir } from "./vault-font";
+
+const MOBILE_DISABLED_NOTICE =
+	"Pagina PDF export is desktop-only for now (mobile export is not stable yet).";
 
 export default class PaginaPlugin extends Plugin {
 	settings: PaginaSettings = { ...DEFAULT_SETTINGS };
 
 	async onload(): Promise<void> {
-		usePluginFontDir((this.manifest as { dir?: string }).dir);
+		const pluginDir = (this.manifest as { dir?: string }).dir;
+		if (pluginDir) usePluginFontDir(pluginDir);
 		await this.loadSettings();
 
 		this.addSettingTab(new PaginaSettingTab(this.app, this));
@@ -17,6 +22,7 @@ export default class PaginaPlugin extends Plugin {
 			id: "pagina-export-current-note",
 			name: "Export current note to PDF",
 			checkCallback: (checking) => {
+				if (isPhoneSession()) return false;
 				const file = this.getActiveMarkdownFile();
 				if (!file) return false;
 				if (!checking) {
@@ -27,6 +33,10 @@ export default class PaginaPlugin extends Plugin {
 		});
 
 		this.addRibbonIcon("file-text", "Pagina: Export to PDF", () => {
+			if (isPhoneSession()) {
+				new Notice(MOBILE_DISABLED_NOTICE);
+				return;
+			}
 			const file = this.getActiveMarkdownFile();
 			if (!file) {
 				new Notice("Pagina: open a markdown note to export");
@@ -37,6 +47,7 @@ export default class PaginaPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu: Menu, file) => {
+				if (isPhoneSession()) return;
 				if (!(file instanceof TFile) || file.extension !== "md") return;
 				menu.addItem((item) => {
 					item
@@ -52,6 +63,7 @@ export default class PaginaPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu: Menu) => {
+				if (isPhoneSession()) return;
 				const file = this.getActiveMarkdownFile();
 				if (!file) return;
 				menu.addItem((item) => {
@@ -73,6 +85,10 @@ export default class PaginaPlugin extends Plugin {
 	}
 
 	openExportModal(file: TFile): void {
+		if (isPhoneSession()) {
+			new Notice(MOBILE_DISABLED_NOTICE);
+			return;
+		}
 		new PaginaExportModal(this.app, this, file).open();
 	}
 

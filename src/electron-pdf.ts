@@ -1,6 +1,3 @@
-import { Platform } from "obsidian";
-import * as os from "os";
-import * as path from "path";
 import { borderSvg } from "./header-borders";
 import { EM_MM, LINE_MM, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
 import type { PaginaSettings, TimestampFormat } from "./types";
@@ -64,7 +61,6 @@ function getIpc(printEl?: HTMLElement): IpcRendererLike {
 }
 
 export function isElectronPrintAvailable(): boolean {
-	if (!Platform.isDesktopApp) return false;
 	try {
 		const electron = require("electron") as ElectronLike;
 		const hasDialog = Boolean(electron?.remote?.dialog?.showSaveDialog);
@@ -117,6 +113,8 @@ export async function openPath(filePath: string): Promise<void> {
 }
 
 export function tempPdfPath(filePath: string): string {
+	const os = require("os") as typeof import("os");
+	const path = require("path") as typeof import("path");
 	const safe = filePath.replace(/[/\\:]/g, "_");
 	return path.join(os.tmpdir(), `pagina-${safe}-${Date.now()}.pdf`);
 }
@@ -341,7 +339,9 @@ export async function printElementToPdf(
 		const ipc = getIpc(printEl);
 		const previousTitle = document.title;
 		const previousDisplay = printEl.style.display;
+		const previousVisibility = printEl.style.visibility;
 		printEl.style.display = "block";
+		printEl.style.visibility = "visible";
 		document.title = title;
 		await sleep(200);
 
@@ -373,7 +373,8 @@ export async function printElementToPdf(
 			return bytes;
 		} finally {
 			void fs.unlink(filepath).catch(() => undefined);
-			printEl.style.display = previousDisplay || "none";
+			printEl.style.display = previousDisplay;
+			printEl.style.visibility = previousVisibility;
 			document.title = previousTitle;
 		}
 	});

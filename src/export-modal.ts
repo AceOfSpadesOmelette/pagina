@@ -1,8 +1,9 @@
-import { loadPdfJs, Modal, Notice, setIcon, Setting, type App, type TFile } from "obsidian";
+import { loadPdfJs, Modal, Notice, Platform, setIcon, Setting, type App, type TFile } from "obsidian";
 import type PaginaPlugin from "./main";
 import type { PaginaSettings } from "./types";
 import { renderPaginaSettings } from "./settings-ui";
-import { buildPdfBytes, exportNoteToPdf } from "./pdf-export";
+import { buildPdfBytes, exportNoteWithoutElectron } from "./pdf-export";
+import { isPhoneSession } from "./session";
 import {
 	ExportCancelledError,
 	isElectronPrintAvailable,
@@ -12,7 +13,15 @@ import {
 } from "./electron-pdf";
 import { mmToPx } from "./paginate";
 import { layoutWarning, resolvePageSizeMm } from "./page-presets";
-import { getDerivedLightVars, injectLightVarsPatch, removeLightVarsPatch, renderNoteForExport, type RenderedNote } from "./render";
+import {
+	applyH1StyleClasses,
+	getDerivedLightVars,
+	injectLightVarsPatch,
+	removeLightVarsPatch,
+	renderNoteForExport,
+	type RenderedNote,
+} from "./render";
+import { prepareConspectusForPrint } from "./print-styles";
 
 type PreviewMode = "html" | "pdf";
 
@@ -39,8 +48,10 @@ export class PaginaExportModal extends Modal {
 	private pdfWrap!: HTMLElement;
 	private renderingEl!: HTMLElement;
 	private layoutWarningEl!: HTMLElement;
-	private htmlBtn!: HTMLButtonElement;
-	private pdfBtn!: HTMLButtonElement;
+	private htmlBtn: HTMLButtonElement | null = null;
+	private pdfBtn: HTMLButtonElement | null = null;
+	private exportBtnEl: HTMLButtonElement | null = null;
+	private exportStatusEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: PaginaPlugin, file: TFile) {
 		super(app);
@@ -52,11 +63,14 @@ export class PaginaExportModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		this.containerEl.style.setProperty("--dialog-width", "60vw");
+		const mobile = isPhoneSession();
+		this.containerEl.style.setProperty("--dialog-width", mobile ? "96vw" : "60vw");
 		this.titleEl.setText("Export to PDF");
 		injectLightVarsPatch(getDerivedLightVars());
 
 		const root = contentEl.createDiv({ attr: { id: "pagina-export" } });
+		root.toggleClass("pagina-export-mobile", mobile);
+		root.toggleClass("pagina-no-preview", mobile);
 		this.previewPane = root.createDiv({ cls: "print-preview" });
 		this.settingsPane = root.createDiv({ cls: "setting-wrapper" });
 
@@ -69,14 +83,22 @@ export class PaginaExportModal extends Modal {
 		this.layoutWarningEl = this.previewPane.createDiv({ cls: "pagina-layout-warning" });
 		this.layoutWarningEl.hide();
 
-		const toggle = this.previewPane.createDiv({ cls: "toggle-container" });
-		this.htmlBtn = this.makeModeButton(toggle, "globe", "HTML", "html");
-		this.pdfBtn = this.makeModeButton(toggle, "notebook", "PDF", "pdf");
+		this.exportStatusEl = this.previewPane.createDiv({ cls: "pagina-export-status" });
+		this.exportStatusEl.hide();
 
 		this.previewEl = this.previewPane.createDiv({ cls: "preview-stage" });
 		this.htmlWrap = this.previewEl.createDiv({ cls: "print-preview-container" });
 		this.pdfWrap = this.previewEl.createDiv({ cls: "pdf-pages" });
-		this.pdfWrap.hide();
+		if (mobile) {
+			this.previewEl.hide();
+			this.htmlWrap.hide();
+			this.pdfWrap.hide();
+		} else {
+			const toggle = this.previewPane.createDiv({ cls: "toggle-container" });
+			this.htmlBtn = this.makeModeButton(toggle, "globe", "HTML", "html");
+			this.pdfBtn = this.makeModeButton(toggle, "notebook", "PDF", "pdf");
+			this.pdfWrap.hide();
+		}
 
 		this.resizeObserver = new ResizeObserver(() => this.applyScale());
 		this.resizeObserver.observe(this.previewEl);
@@ -139,11 +161,13 @@ export class PaginaExportModal extends Modal {
 		});
 
 		const actions = pane.createDiv({ cls: "pagina-export-actions" });
-		new Setting(actions).setHeading().addButton((btn) => {
+		new Setting(actions).addButton((btn) => {
 			btn.setButtonText("Export").setCta().onClick(() => {
 				void this.runExport();
 			});
-			btn.buttonEl.setAttribute("style", "margin: 0 auto; width: -webkit-fill-available;");
+			btn.buttonEl.classList.add("pagina-export-btn");
+			btn.setDisabled(this.exporting);
+			this.exportBtnEl = btn.buttonEl;
 		});
 	}
 
@@ -163,6 +187,7 @@ export class PaginaExportModal extends Modal {
 	private onDraftChange(): void {
 		const message = this.refreshLayoutWarning();
 		this.toggleTitle(this.draft.includeFileNameAsTitle);
+		this.applyH1Styles();
 		this.applyScale();
 		if (message) {
 			if (this.pdfTimer != null) {
@@ -171,7 +196,13 @@ export class PaginaExportModal extends Modal {
 			}
 			return;
 		}
-		if (this.mode === "pdf") this.schedulePdf();
+		if (isPhoneSession()) return;
+		if (this.mode !== "pdf") return;
+		if (!this.draft.enablePreview) {
+			this.showPreviewDisabled();
+			return;
+		}
+		this.schedulePdf();
 	}
 
 	private toggleTitle(show: boolean): void {
@@ -180,6 +211,16 @@ export class PaginaExportModal extends Modal {
 			root?.querySelectorAll("h1.__title__").forEach((el) => {
 				(el as HTMLElement).style.display = display;
 			});
+		}
+	}
+
+	private applyH1Styles(): void {
+		for (const root of [this.rendered?.printEl, this.previewClone]) {
+			if (!root) continue;
+			applyH1StyleClasses(root, this.draft);
+			const content =
+				(root.querySelector(".markdown-preview-view") as HTMLElement | null) ?? root;
+			prepareConspectusForPrint(content);
 		}
 	}
 
@@ -196,14 +237,34 @@ export class PaginaExportModal extends Modal {
 		this.htmlWrap.style.setProperty("--modal-scale", String(scale > 0 ? scale : 1));
 	}
 
+	private showPreviewDisabled(): void {
+		this.pdfGen++;
+		if (this.pdfTimer != null) {
+			window.clearTimeout(this.pdfTimer);
+			this.pdfTimer = null;
+		}
+		this.pdfWrap.empty();
+		this.pdfWrap.createDiv({
+			cls: "pagina-preview-disabled",
+			text: "Preview disabled. Click Export to generate PDF.",
+		});
+		this.pdfWrap.show();
+		this.htmlWrap.hide();
+		this.setRendering(false);
+	}
+
 	private async showInitial(): Promise<void> {
+		if (isPhoneSession()) return;
 		this.setRendering(true);
 		try {
 			await this.renderDocument();
 		} catch (err) {
 			console.error(err);
 			const message = err instanceof Error ? err.message : String(err);
-			this.htmlWrap.setText(`Preview failed — ${message}`);
+			const target = this.mode === "pdf" ? this.pdfWrap : this.htmlWrap;
+			target.empty();
+			target.createDiv({ cls: "pagina-preview-error", text: `Preview failed — ${message}` });
+			target.show();
 		} finally {
 			this.setRendering(false);
 		}
@@ -220,7 +281,11 @@ export class PaginaExportModal extends Modal {
 				app: this.app,
 				file: this.file,
 				includeTitle: this.draft.includeFileNameAsTitle,
+				pageBreakBeforeH1: this.draft.pageBreakBeforeH1,
+				centerH1: this.draft.centerH1,
+				underlineH1: this.draft.underlineH1,
 			});
+			prepareConspectusForPrint(this.rendered.contentEl);
 			this.mountHtmlPreview();
 			this.applyScale();
 		})();
@@ -236,16 +301,24 @@ export class PaginaExportModal extends Modal {
 		this.htmlWrap.empty();
 		const item = this.htmlWrap.createDiv({ cls: "print-preview-item" });
 		const clone = this.rendered.printEl.cloneNode(true) as HTMLElement;
+		clone.style.position = "relative";
+		clone.style.left = "0";
+		clone.style.top = "0";
+		clone.style.visibility = "visible";
 		clone.style.display = "block";
+		clone.style.zIndex = "auto";
+		clone.style.pointerEvents = "auto";
+		clone.style.height = "auto";
+		clone.style.overflow = "visible";
 		item.appendChild(clone);
 		this.previewClone = clone;
 	}
 
 	private async setMode(mode: PreviewMode): Promise<void> {
-		if (this.mode === mode) return;
+		if (isPhoneSession() || this.mode === mode) return;
 		this.mode = mode;
-		this.htmlBtn.toggleClass("active", mode === "html");
-		this.pdfBtn.toggleClass("active", mode === "pdf");
+		this.htmlBtn?.toggleClass("active", mode === "html");
+		this.pdfBtn?.toggleClass("active", mode === "pdf");
 		if (mode === "html") {
 			this.pdfWrap.hide();
 			this.htmlWrap.show();
@@ -276,7 +349,8 @@ export class PaginaExportModal extends Modal {
 		const pending = this.inflight.get(key);
 		if (pending) return pending;
 		const settings = structuredClone(this.draft);
-		const job = buildPdfBytes(this.app, this.file, settings, this.rendered ?? undefined)
+		const reuseRender = this.rendered ?? undefined;
+		const job = buildPdfBytes(this.app, this.file, settings, reuseRender)
 			.then(({ bytes }) => {
 				this.pdfCache.set(key, bytes);
 				return bytes;
@@ -289,11 +363,16 @@ export class PaginaExportModal extends Modal {
 	}
 
 	private async refreshPdf(): Promise<void> {
+		if (isPhoneSession()) return;
+		if (!this.draft.enablePreview) {
+			this.showPreviewDisabled();
+			return;
+		}
 		if (this.refreshLayoutWarning()) return;
 		const gen = ++this.pdfGen;
 		this.setRendering(true);
 		try {
-			await this.renderDocument();
+			if (!isPhoneSession()) await this.renderDocument();
 			if (gen !== this.pdfGen || this.mode !== "pdf") return;
 			const bytes = await this.ensurePdfBytes();
 			if (gen !== this.pdfGen || this.mode !== "pdf") return;
@@ -318,7 +397,7 @@ export class PaginaExportModal extends Modal {
 
 		for (let i = 1; i <= pdf.numPages; i++) {
 			const page = await pdf.getPage(i);
-			const viewport = page.getViewport({ scale: 2.5 });
+			const viewport = page.getViewport({ scale: Platform.isMobile ? 1 : 2.5 });
 			const canvas = document.createElement("canvas");
 			const context = canvas.getContext("2d");
 			if (!context) continue;
@@ -336,6 +415,29 @@ export class PaginaExportModal extends Modal {
 		else this.renderingEl.hide();
 	}
 
+	private setExportBusy(busy: boolean): void {
+		this.exporting = busy;
+		if (this.exportBtnEl) this.exportBtnEl.disabled = busy;
+	}
+
+	private setExportStatus(message: string | null): void {
+		if (!this.exportStatusEl) return;
+		if (!message) {
+			this.exportStatusEl.setText("");
+			this.exportStatusEl.hide();
+			return;
+		}
+		this.exportStatusEl.setText(message);
+		this.exportStatusEl.show();
+	}
+
+	/** Drop the parked HTML render so mobile raster does not keep two copies of the note. */
+	private discardPreviewRender(): void {
+		this.rendered?.cleanup();
+		this.rendered = null;
+		this.previewClone = null;
+	}
+
 	private async runExport(): Promise<void> {
 		if (this.exporting) return;
 		const layoutMessage = this.refreshLayoutWarning();
@@ -343,37 +445,62 @@ export class PaginaExportModal extends Modal {
 			new Notice(layoutMessage, 8000);
 			return;
 		}
-		this.exporting = true;
-		this.plugin.settings = structuredClone(this.draft);
-		await this.plugin.saveSettings();
 
+		this.setExportBusy(true);
 		const notice = new Notice("Pagina: exporting PDF…", 0);
+		const setProgress = (message: string) => {
+			try {
+				notice.noticeEl.setText(message);
+			} catch {
+				/* notice already dismissed */
+			}
+			this.setExportStatus(message);
+		};
+
 		try {
-			await this.renderDocument();
+			this.plugin.settings = structuredClone(this.draft);
+			await this.plugin.saveSettings();
+
 			if (isElectronPrintAvailable()) {
+				setProgress("Pagina: exporting PDF…");
+				await this.renderDocument();
 				const bytes = await this.ensurePdfBytes();
 				const dest = await promptSavePath(this.file.basename, this.draft.timestampFormat);
 				await writePdfToPath(dest, bytes);
 				if (this.draft.openAfterExport) await openPath(dest);
 				notice.hide();
+				this.setExportStatus(null);
 				new Notice(`Pagina: exported ${dest}`);
 			} else {
-				const path = await exportNoteToPdf(this.app, this.file, this.plugin.settings);
+				setProgress("Pagina: opening the print dialog…");
+				this.discardPreviewRender();
+				const outPath = await exportNoteWithoutElectron(this.app, this.file, this.plugin.settings, setProgress);
 				notice.hide();
-				new Notice(`Pagina: exported ${path}`);
+				this.setExportStatus(null);
+				new Notice(
+					outPath
+						? `Pagina: exported ${outPath}`
+						: "Pagina: in the print dialog, choose Save as PDF, then pick a folder.",
+					8000,
+				);
 			}
 			this.close();
 		} catch (err) {
-			notice.hide();
+			try {
+				notice.hide();
+			} catch {
+				/* ignore */
+			}
+			this.setExportStatus(null);
+			console.error("Pagina export failed", err);
 			if (err instanceof ExportCancelledError) {
 				new Notice("Pagina: export cancelled");
 				return;
 			}
-			console.error(err);
 			const message = err instanceof Error ? err.message : String(err);
-			new Notice(`Pagina: export failed — ${message}`, 8000);
+			new Notice(`Pagina: export failed — ${message}`, 10000);
 		} finally {
-			this.exporting = false;
+			this.setExportBusy(false);
 		}
 	}
 }

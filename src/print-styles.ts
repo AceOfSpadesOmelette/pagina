@@ -5,12 +5,31 @@
 export const PRINT_CSS = `
 .print.pagina-print {
   background: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .print.pagina-print table {
   border-collapse: collapse;
   width: 100%;
+  max-width: 100%;
   break-inside: auto;
   page-break-inside: auto;
+}
+.print.pagina-print table th,
+.print.pagina-print table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.print.pagina-print table.pagina-table-compact th,
+.print.pagina-print table.pagina-table-compact td {
+  padding: 2px 4px !important;
+}
+.print.pagina-print .pagina-table-fit {
+  max-width: 100%;
+  overflow: hidden;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 .print.pagina-print thead {
   display: table-header-group;
@@ -56,11 +75,45 @@ export const PRINT_CSS = `
 .print.pagina-print .edit-block-button {
   display: none !important;
 }
+/* Body H1 only — never the file-name title or Conspectus TOC title. */
+/* Skip the first body H1 so the optional file-name title is not left alone on a page. */
+.print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
+  break-before: page;
+  page-break-before: always;
+}
+.print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+  text-align: center;
+}
+.print.pagina-print.pagina-underline-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+  text-decoration: underline;
+}
+.print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
+  display: none !important;
+}
+.print.pagina-print .pagina-forced-break {
+  break-before: page;
+  page-break-before: always;
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  visibility: hidden;
+}
 img.__canvas__ {
   width: 100% !important;
   height: auto !important;
 }
 @media print {
+  .print.pagina-print {
+    visibility: visible !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    z-index: auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   .print .markdown-preview-view {
     height: auto !important;
   }
@@ -71,9 +124,33 @@ img.__canvas__ {
   .print.pagina-print img,
   .print.pagina-print .mermaid,
   .print.pagina-print pre,
-  .print.pagina-print .callout {
+  .print.pagina-print .callout,
+  .print.pagina-print .pagina-table-fit {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+  .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
+    break-before: page;
+    page-break-before: always;
+  }
+  .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+    text-align: center;
+  }
+  .print.pagina-print.pagina-underline-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+    text-decoration: underline;
+  }
+  .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
+    display: none !important;
+  }
+  .print.pagina-print .pagina-forced-break {
+    break-before: page;
+    page-break-before: always;
+    display: block;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    visibility: hidden;
   }
 }
 `;
@@ -92,6 +169,158 @@ export function stripExportChrome(root: HTMLElement): void {
 	];
 	for (const sel of selectors) {
 		root.querySelectorAll(sel).forEach((el) => el.remove());
+	}
+}
+
+const TABLE_FIT_SLOP_PX = 1;
+
+function printableWidth(root: HTMLElement): number {
+	return Math.max(1, root.clientWidth || root.offsetWidth);
+}
+
+function tableMinContentWidth(table: HTMLTableElement): number {
+	const prevWidth = table.style.width;
+	const prevMaxWidth = table.style.maxWidth;
+	table.style.width = "min-content";
+	table.style.maxWidth = "none";
+	void table.offsetWidth;
+	const needed = Math.max(table.scrollWidth, table.offsetWidth);
+	table.style.width = prevWidth;
+	table.style.maxWidth = prevMaxWidth;
+	return needed;
+}
+
+function stretchTable(table: HTMLTableElement): void {
+	table.style.width = "100%";
+	table.style.maxWidth = "100%";
+}
+
+/**
+ * Keep every column of a wide table on the page by compacting padding, then
+ * scaling only that table. Tables that can wrap stay at 100% and body size.
+ */
+export function fitWideTables(root: HTMLElement): void {
+	const hostWidth = printableWidth(root);
+	root.querySelectorAll("table").forEach((node) => {
+		const table = node as HTMLTableElement;
+		if (table.closest(".pagina-table-fit")) return;
+
+		stretchTable(table);
+		void table.offsetWidth;
+
+		let needed = tableMinContentWidth(table);
+		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
+			stretchTable(table);
+			return;
+		}
+
+		table.classList.add("pagina-table-compact");
+		void table.offsetWidth;
+		needed = tableMinContentWidth(table);
+		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
+			stretchTable(table);
+			return;
+		}
+
+		const scale = Math.min(1, hostWidth / needed);
+
+		const wrap = document.createElement("div");
+		wrap.className = "pagina-table-fit";
+		wrap.style.overflow = "hidden";
+		wrap.style.width = `${needed}px`;
+		wrap.style.setProperty("zoom", String(scale));
+		table.parentNode?.insertBefore(wrap, table);
+		wrap.appendChild(table);
+		table.style.width = `${needed}px`;
+		table.style.maxWidth = "none";
+	});
+}
+
+/**
+ * For the html2canvas raster path (CSS page breaks are ignored): push each
+ * body H1 after the first to the top of the next page by inserting height spacers.
+ * The first body H1 is skipped so it can stay with the optional file-name title.
+ */
+function insertBreakSpacerBefore(root: HTMLElement, el: HTMLElement, pageHeight: number): void {
+	const offset =
+		el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
+	const posInPage = ((offset % pageHeight) + pageHeight) % pageHeight;
+	if (posInPage < 1) return;
+	const pad = pageHeight - posInPage;
+	const spacer = document.createElement("div");
+	spacer.className = "pagina-h1-break";
+	spacer.setAttribute("aria-hidden", "true");
+	spacer.style.height = `${pad}px`;
+	spacer.style.width = "100%";
+	spacer.style.margin = "0";
+	spacer.style.padding = "0";
+	spacer.style.border = "none";
+	el.parentNode?.insertBefore(spacer, el);
+	void root.offsetHeight;
+}
+
+export function insertH1PageBreakSpacers(root: HTMLElement, pageHeightPx: number): void {
+	const pageHeight = Math.max(1, Math.ceil(pageHeightPx));
+	const headings = Array.from(
+		root.querySelectorAll("h1:not(.__title__):not(.conspectus-toc-title)"),
+	) as HTMLElement[];
+	for (const h1 of headings.slice(1)) {
+		insertBreakSpacerBefore(root, h1, pageHeight);
+	}
+}
+
+function makeForcedBreak(): HTMLElement {
+	const el = document.createElement("div");
+	el.className = "pagina-forced-break";
+	el.setAttribute("aria-hidden", "true");
+	return el;
+}
+
+/**
+ * Conspectus TOC print prep: hide export:false blocks and insert sibling
+ * `.pagina-forced-break` markers (Chromium honors break-before on these reliably).
+ * Idempotent — safe to call on preview refresh.
+ */
+export function prepareConspectusForPrint(root: HTMLElement): void {
+	const tocs = Array.from(root.querySelectorAll(".conspectus-toc")) as HTMLElement[];
+	for (const toc of tocs) {
+		if (toc.classList.contains("conspectus-toc-hide-export")) {
+			// Drop any markers we previously attached around a now-hidden TOC.
+			const prev = toc.previousElementSibling;
+			if (prev?.classList.contains("pagina-forced-break")) prev.remove();
+			const next = toc.nextElementSibling;
+			if (next?.classList.contains("pagina-forced-break")) next.remove();
+			continue;
+		}
+
+		if (toc.classList.contains("conspectus-toc-break-before")) {
+			const prev = toc.previousElementSibling;
+			if (!prev?.classList.contains("pagina-forced-break")) {
+				toc.parentNode?.insertBefore(makeForcedBreak(), toc);
+			}
+		} else {
+			const prev = toc.previousElementSibling;
+			if (prev?.classList.contains("pagina-forced-break")) prev.remove();
+		}
+
+		if (toc.classList.contains("conspectus-toc-break-after")) {
+			const next = toc.nextElementSibling;
+			if (!next?.classList.contains("pagina-forced-break")) {
+				toc.parentNode?.insertBefore(makeForcedBreak(), toc.nextSibling);
+			}
+		} else {
+			const next = toc.nextElementSibling;
+			if (next?.classList.contains("pagina-forced-break")) next.remove();
+		}
+	}
+}
+
+/** Raster fallback: pixel-pad before each `.pagina-forced-break` (CSS breaks ignored). */
+export function insertForcedBreakSpacers(root: HTMLElement, pageHeightPx: number): void {
+	const pageHeight = Math.max(1, Math.ceil(pageHeightPx));
+	const markers = Array.from(root.querySelectorAll(".pagina-forced-break")) as HTMLElement[];
+	for (const marker of markers) {
+		insertBreakSpacerBefore(root, marker, pageHeight);
 	}
 }
 
