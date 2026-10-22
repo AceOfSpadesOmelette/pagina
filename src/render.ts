@@ -1,6 +1,13 @@
 import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, TFile } from "obsidian";
 import { sanitizeCssText } from "./css-sanitize";
-import { PRINT_CSS, centerAlignedImages, fitWideTables, stripExportChrome } from "./print-styles";
+import { stampImageRequests } from "./image-fit";
+import {
+	LIGHT_PRINT_SURFACE_VARS,
+	PRINT_CSS,
+	centerAlignedImages,
+	fitWideTables,
+	stripExportChrome,
+} from "./print-styles";
 
 const LIGHT_PATCH_ID = "pagina-theme-light-patch";
 
@@ -680,7 +687,8 @@ export function getDerivedLightVars(): Record<string, string> {
 	for (const [prop, rawVal] of Object.entries(derivedDarkVars)) {
 		if (!lightVars.has(prop)) missing[prop] = rawVal;
 	}
-	return missing;
+	/* Concrete light values win over dark-mode formulas for the print surface. */
+	return { ...missing, ...LIGHT_PRINT_SURFACE_VARS };
 }
 
 export function injectLightVarsPatch(vars: Record<string, string>): void {
@@ -812,6 +820,8 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	if (opts.forRaster && opts.bakeMermaid !== false) {
 		await rasterizeSvgs(viewEl);
 	}
+	// Stamp before inlining. Inlining replaces img src, and sizes are paired by that src.
+	stampImageRequests(viewEl, raw);
 	if (opts.forRaster || opts.forPrint) {
 		await inlineImages(viewEl, app);
 	}

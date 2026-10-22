@@ -26,11 +26,15 @@ Open a note, then use the ribbon icon, the command **Export current note to PDF*
 
 The export window previews the note as HTML or as PDF pages. Settings cover:
 
-- Page size, orientation, and margins
+- Page size, orientation, and margins. Orientation is Portrait or Landscape; Portrait is the default.
 - A header and footer, each with left, center, and right slots
 - Border styles and colors for the header and footer
 - Font and text color. A blank font uses the vault text font
 - Date and time formats
+
+**Import settings** and **Export settings** at the bottom of the settings pane save or restore that configuration as `pagina-settings.json`.
+
+The preview and PDF use a light page. Pagina remaps text and interactive colors on that page so embedded controls stay readable when Obsidian is in dark mode.
 
 Slots accept these tokens:
 

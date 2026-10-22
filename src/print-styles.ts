@@ -1,10 +1,45 @@
 /**
+ * Light-paper tokens. Dark-mode Obsidian leaves `--interactive-*` and
+ * `--background-*` dark while Pagina forces near-black text, which paints
+ * embedded controls (for example quiz buttons) black on black.
+ * Keep these declarations in sync with styles.css.
+ */
+export const LIGHT_PRINT_SURFACE_VARS: Record<string, string> = {
+	"--background-primary": "#ffffff",
+	"--background-secondary": "#f2f3f5",
+	"--background-modifier-border": "#d0d0d0",
+	"--background-modifier-hover": "rgba(0, 0, 0, 0.06)",
+	"--interactive-normal": "#f2f3f5",
+	"--interactive-hover": "#e3e5e8",
+	"--interactive-accent": "#4c6ef5",
+	"--interactive-accent-hover": "#3b5bdb",
+	"--text-on-accent": "#ffffff",
+	"--text-normal": "#222222",
+	"--text-muted": "#555555",
+	"--text-faint": "#888888",
+	"--h1-color": "var(--text-normal)",
+	"--h2-color": "var(--text-normal)",
+	"--h3-color": "var(--text-normal)",
+	"--h4-color": "var(--text-normal)",
+	"--h5-color": "var(--text-normal)",
+	"--h6-color": "var(--text-normal)",
+	"--bold-color": "var(--text-normal)",
+	"--italic-color": "var(--text-normal)",
+};
+
+export const LIGHT_PRINT_SURFACE_CSS = Object.entries(LIGHT_PRINT_SURFACE_VARS)
+	.map(([prop, value]) => `  ${prop}: ${value};`)
+	.join("\n");
+
+/**
  * Print rules for `.print.pagina-print`. Injected into the document and also
  * mirrored under @media print in styles.css for the native print-to-pdf pass.
  */
 export const PRINT_CSS = `
 .print.pagina-print {
   background: #ffffff;
+  color: #222222;
+${LIGHT_PRINT_SURFACE_CSS}
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -43,6 +78,7 @@ export const PRINT_CSS = `
   break-after: auto;
 }
 .print.pagina-print img,
+.print.pagina-print .image-embed,
 .print.pagina-print svg,
 .print.pagina-print video,
 .print.pagina-print pre,
@@ -111,6 +147,9 @@ img.__canvas__ {
     left: auto !important;
     top: auto !important;
     z-index: auto !important;
+    background: #ffffff;
+    color: #222222;
+${LIGHT_PRINT_SURFACE_CSS}
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

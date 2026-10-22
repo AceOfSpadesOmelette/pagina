@@ -98,6 +98,16 @@
 #pagina-export .print-preview-item .pagina-print {
 	background: #ffffff;
 	color: #222222;
+	/* Keep in sync with LIGHT_PRINT_SURFACE_VARS in src/print-styles.ts */
+	--background-primary: #ffffff;
+	--background-secondary: #f2f3f5;
+	--background-modifier-border: #d0d0d0;
+	--background-modifier-hover: rgba(0, 0, 0, 0.06);
+	--interactive-normal: #f2f3f5;
+	--interactive-hover: #e3e5e8;
+	--interactive-accent: #4c6ef5;
+	--interactive-accent-hover: #3b5bdb;
+	--text-on-accent: #ffffff;
 	--text-normal: #222222;
 	--text-muted: #555555;
 	--text-faint: #888888;
@@ -230,6 +240,29 @@
 		left: auto !important;
 		top: auto !important;
 		z-index: auto !important;
+		background: #ffffff;
+		color: #222222;
+		/* Keep in sync with LIGHT_PRINT_SURFACE_VARS in src/print-styles.ts */
+		--background-primary: #ffffff;
+		--background-secondary: #f2f3f5;
+		--background-modifier-border: #d0d0d0;
+		--background-modifier-hover: rgba(0, 0, 0, 0.06);
+		--interactive-normal: #f2f3f5;
+		--interactive-hover: #e3e5e8;
+		--interactive-accent: #4c6ef5;
+		--interactive-accent-hover: #3b5bdb;
+		--text-on-accent: #ffffff;
+		--text-normal: #222222;
+		--text-muted: #555555;
+		--text-faint: #888888;
+		--h1-color: var(--text-normal);
+		--h2-color: var(--text-normal);
+		--h3-color: var(--text-normal);
+		--h4-color: var(--text-normal);
+		--h5-color: var(--text-normal);
+		--h6-color: var(--text-normal);
+		--bold-color: var(--text-normal);
+		--italic-color: var(--text-normal);
 		-webkit-print-color-adjust: exact;
 		print-color-adjust: exact;
 	}
@@ -273,6 +306,7 @@
 	}
 	.print.pagina-print tr,
 	.print.pagina-print img,
+	.print.pagina-print .image-embed,
 	.print.pagina-print svg,
 	.print.pagina-print pre,
 	.print.pagina-print .mermaid,
@@ -280,6 +314,13 @@
 	.print.pagina-print .pagina-table-fit {
 		break-inside: avoid;
 		page-break-inside: avoid;
+	}
+	.print.pagina-print img,
+	.print.pagina-print .image-embed {
+		max-width: 100%;
+	}
+	.print.pagina-print img {
+		height: auto;
 	}
 	.print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
 		break-before: page;

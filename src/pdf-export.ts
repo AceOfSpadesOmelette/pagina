@@ -13,6 +13,7 @@ import {
 	TEXT_BORDER_GAP_MM,
 } from "./header-footer-layout";
 import { layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { fitStampedImages } from "./image-fit";
 import { computePageLayout, type PageLayout } from "./paginate";
 import {
 	PRINT_CSS,
@@ -70,6 +71,16 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 
 function yieldToUi(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Lay the note out at the margin-adjusted column and fit images into that box. */
+async function applyExportContentBox(rendered: RenderedNote, layout: PageLayout): Promise<void> {
+	const width = `${Math.max(1, Math.ceil(layout.contentWidthPx))}px`;
+	rendered.printEl.style.width = width;
+	rendered.contentEl.style.width = width;
+	rendered.contentEl.style.maxWidth = width;
+	rendered.contentEl.style.boxSizing = "border-box";
+	await fitStampedImages(rendered.contentEl, layout.contentWidthPx, layout.contentHeightPx);
 }
 
 /**
@@ -138,6 +149,7 @@ async function buildPdfBytesElectron(
 			headerOmitText: headerFace != null,
 			footerOmitText: footerFace != null,
 		});
+		await applyExportContentBox(rendered, layout);
 		const raw = await printElementToPdf(
 			rendered.printEl,
 			options,
@@ -183,10 +195,8 @@ export async function buildPdfBytesRaster(
 
 	try {
 		rendered.printEl.style.display = "block";
+		await applyExportContentBox(rendered, layout);
 		const contentEl = rendered.contentEl;
-		contentEl.style.width = `${Math.ceil(layout.contentWidthPx)}px`;
-		contentEl.style.maxWidth = `${Math.ceil(layout.contentWidthPx)}px`;
-		contentEl.style.boxSizing = "border-box";
 		void contentEl.offsetHeight;
 
 		prepareConspectusForPrint(contentEl);
@@ -458,12 +468,12 @@ export async function exportNoteViaWebPrint(
 		rendered.printEl.style.position = "static";
 		rendered.printEl.style.left = "auto";
 		rendered.printEl.style.top = "auto";
-		rendered.printEl.style.width = "100%";
 		rendered.printEl.style.height = "auto";
 		rendered.printEl.style.zIndex = "auto";
 		rendered.printEl.style.pointerEvents = "auto";
 		rendered.printEl.style.transform = "";
 		doc.body.appendChild(rendered.printEl);
+		await applyExportContentBox(rendered, computePageLayout(settings));
 		await waitForPrintImages(doc);
 
 		let dialogOpened = false;

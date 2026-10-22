@@ -139,6 +139,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		generateTaggedPDF: data.generateTaggedPDF ?? DEFAULT_SETTINGS.generateTaggedPDF,
 		pdfMetadata: data.pdfMetadata ?? DEFAULT_SETTINGS.pdfMetadata,
 		enablePreview: data.enablePreview ?? DEFAULT_SETTINGS.enablePreview,
+		landscape: data.landscape === true,
 		timestampFormat: (["none", "EPOCH", "YYYYMMDD", "YYYY-MM-DD", "YYYYMMDD-HHMMSS"].includes(
 			String(data.timestampFormat),
 		)

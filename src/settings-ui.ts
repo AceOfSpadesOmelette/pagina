@@ -1,8 +1,13 @@
-import { Setting } from "obsidian";
+import { Notice, Setting } from "obsidian";
 import { HEADER_BORDERS, type HeaderBorderStyle } from "./header-borders";
 import { obsidianFontLabel } from "./electron-pdf";
 import { layoutWarning, MARGIN_OPTIONS, PAGE_SIZE_OPTIONS } from "./page-presets";
 import { isPhoneSession } from "./session";
+import {
+	applyImportedSettings,
+	downloadSettingsJson,
+	parseSettingsJson,
+} from "./settings-io";
 import { DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
@@ -177,13 +182,16 @@ export function renderPaginaSettings(
 		);
 
 	new Setting(container)
-		.setName("Landscape")
-		.addToggle((t) =>
-			t.setValue(settings.landscape).onChange((v) => {
-				settings.landscape = v;
+		.setName("Orientation")
+		.setDesc("Portrait is the default.")
+		.addDropdown((dd) => {
+			dd.addOption("portrait", "Portrait");
+			dd.addOption("landscape", "Landscape");
+			dd.setValue(settings.landscape ? "landscape" : "portrait").onChange((v) => {
+				settings.landscape = v === "landscape";
 				notify();
-			}),
-		);
+			});
+		});
 
 	new Setting(container).setName("PDF").setHeading();
 
@@ -303,6 +311,49 @@ export function renderPaginaSettings(
 				notify();
 			}),
 		);
+
+	new Setting(container).setName("Settings file").setHeading();
+
+	new Setting(container)
+		.setName("Export settings")
+		.setDesc("Download the current configuration as JSON.")
+		.addButton((btn) =>
+			btn.setButtonText("Export").onClick(() => {
+				downloadSettingsJson(settings);
+			}),
+		);
+
+	new Setting(container)
+		.setName("Import settings")
+		.setDesc("Replace the current configuration from a JSON file.")
+		.addButton((btn) =>
+			btn.setButtonText("Import").onClick(() => {
+				pickSettingsFile((text) => {
+					try {
+						applyImportedSettings(settings, parseSettingsJson(text));
+						notify();
+						opts.onRebuild();
+						new Notice("Pagina settings imported");
+					} catch (err) {
+						new Notice(err instanceof Error ? err.message : "Could not import settings");
+					}
+				});
+			}),
+		);
+}
+
+function pickSettingsFile(onText: (text: string) => void): void {
+	const input = document.createElement("input");
+	input.type = "file";
+	input.accept = ".json,application/json";
+	input.addEventListener("change", () => {
+		const file = input.files?.[0];
+		if (!file) return;
+		void file.text().then(onText, () => {
+			new Notice("Could not read the settings file");
+		});
+	});
+	input.click();
 }
 
 function addPairedText(
