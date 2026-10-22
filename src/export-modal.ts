@@ -155,7 +155,8 @@ export class PaginaExportModal extends Modal {
 	private renderSettings(): void {
 		const pane = this.settingsPane;
 		pane.empty();
-		renderPaginaSettings(pane, this.draft, {
+		const scroll = pane.createDiv({ cls: "pagina-settings-scroll" });
+		renderPaginaSettings(scroll, this.draft, {
 			onRebuild: () => this.renderSettings(),
 			onChange: () => this.onDraftChange(),
 		});

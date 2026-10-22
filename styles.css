@@ -18,7 +18,24 @@
 #pagina-export .setting-wrapper {
 	width: 320px;
 	margin-left: 16px;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+#pagina-export .pagina-settings-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-x: hidden;
 	overflow-y: auto;
+}
+
+#pagina-export .pagina-export-actions {
+	flex: 0 0 auto;
+	padding-top: 0.5rem;
+	background: var(--background-primary);
+	border-top: 1px solid var(--background-modifier-border);
 }
 
 #pagina-export.pagina-export-mobile {
@@ -41,9 +58,6 @@
 	flex: 1 1 auto;
 	min-height: 0;
 	max-height: none;
-	overflow-x: hidden;
-	overflow-y: auto;
-	padding-bottom: 4.5rem;
 }
 
 #pagina-export.pagina-export-mobile .setting-item {
@@ -59,15 +73,6 @@
 #pagina-export.pagina-export-mobile .setting-item-control {
 	width: 100%;
 	justify-content: flex-start;
-}
-
-#pagina-export.pagina-export-mobile .pagina-export-actions {
-	position: sticky;
-	bottom: 0;
-	z-index: 5;
-	padding: 0.5rem 0 0.25rem;
-	background: var(--background-primary);
-	border-top: 1px solid var(--background-modifier-border);
 }
 
 #pagina-export .setting-wrapper .setting-item[hidden] {
