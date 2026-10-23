@@ -14,7 +14,8 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"importHelpers": true,
-		"lib": ["ES2021", "DOM", "DOM.Iterable"]
+		"lib": ["ES2021", "DOM", "DOM.Iterable"],
+		"types": []
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

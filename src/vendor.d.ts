@@ -33,3 +33,20 @@ declare module "electron" {
 	const electron: ElectronModule;
 	export default electron;
 }
+
+declare module "fs" {
+	export const promises: {
+		writeFile(path: string, data: Uint8Array): Promise<void>;
+		access(path: string): Promise<void>;
+		readFile(path: string): Promise<Uint8Array>;
+		unlink(path: string): Promise<void>;
+	};
+}
+
+declare module "path" {
+	export function join(...parts: string[]): string;
+}
+
+declare module "os" {
+	export function tmpdir(): string;
+}

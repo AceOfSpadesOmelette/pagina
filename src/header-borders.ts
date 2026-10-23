@@ -1,4 +1,6 @@
-import { jsPDF } from "jspdf";
+import { rgb, type PDFPage } from "pdf-lib";
+
+const PT_PER_MM = 72 / 25.4;
 
 /** Word-style header and footer rules. Each id is one row of the border gallery. */
 export type HeaderBorderStyle =
@@ -106,13 +108,14 @@ export function borderSvg(style: unknown, color: unknown): string {
 	return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${heightPx}" style="display:block">${body}</svg>`;
 }
 
-/** Draw the rule across the content width. `yMm` is the top of the border band. */
+/** Draw the rule across the content width. `yTopMm` is the top of the band, measured from the top of the page. */
 export function drawBorderBand(
-	pdf: jsPDF,
+	page: PDFPage,
+	pageHeightPt: number,
 	style: unknown,
 	color: unknown,
 	xMm: number,
-	yMm: number,
+	yTopMm: number,
 	widthMm: number,
 ): void {
 	const id = normalizeBorderStyle(style);
@@ -121,21 +124,28 @@ export function drawBorderBand(
 	const strokes = strokesFor(id, sanitizeColor(color));
 	for (const stroke of strokes) {
 		const [r, g, b] = hexRgb(stroke.color);
-		pdf.setDrawColor(r, g, b);
-		pdf.setLineWidth(Math.max(0.05, stroke.widthMm));
-		pdf.setLineDashPattern(stroke.dashMm ?? [], 0);
-		pdf.setLineCap(stroke.kind === "line" && stroke.dashMm ? "round" : "butt");
+		const ink = rgb(r / 255, g / 255, b / 255);
+		const thickness = Math.max(0.05, stroke.widthMm) * PT_PER_MM;
+		const dash = stroke.dashMm?.map((n) => n * PT_PER_MM);
 		if (stroke.kind === "wave") {
-			drawWave(pdf, xMm, yMm + stroke.yMm, widthMm, stroke.bandMm ?? extent * 0.7);
+			drawWave(
+				page,
+				pageHeightPt,
+				ink,
+				thickness,
+				dash,
+				xMm,
+				yTopMm + stroke.yMm,
+				widthMm,
+				stroke.bandMm ?? extent * 0.7,
+			);
 		} else if (stroke.kind === "hatch") {
-			drawHatch(pdf, xMm, yMm, widthMm, extent);
+			drawHatch(page, pageHeightPt, ink, thickness, xMm, yTopMm, widthMm, extent);
 		} else {
-			const y = yMm + stroke.yMm;
-			pdf.line(xMm, y, xMm + widthMm, y);
+			const y = yTopMm + stroke.yMm;
+			strokeLine(page, pageHeightPt, ink, thickness, dash, xMm, y, xMm + widthMm, y);
 		}
 	}
-	pdf.setLineDashPattern([], 0);
-	pdf.setLineCap("butt");
 }
 
 function strokesFor(style: HeaderBorderStyle, color: string): Stroke[] {
@@ -229,7 +239,37 @@ function strokeSvg(stroke: Stroke, heightPx: number, extentMm: number): string {
 	return `<line x1="0" y1="${y}" x2="100%" y2="${y}" stroke="${stroke.color}" stroke-width="${width}"${dash}${cap}/>`;
 }
 
-function drawWave(pdf: jsPDF, x: number, midY: number, width: number, amp: number): void {
+function strokeLine(
+	page: PDFPage,
+	pageHeightPt: number,
+	color: ReturnType<typeof rgb>,
+	thickness: number,
+	dash: number[] | undefined,
+	x0: number,
+	y0: number,
+	x1: number,
+	y1: number,
+): void {
+	page.drawLine({
+		start: { x: x0 * PT_PER_MM, y: pageHeightPt - y0 * PT_PER_MM },
+		end: { x: x1 * PT_PER_MM, y: pageHeightPt - y1 * PT_PER_MM },
+		thickness,
+		color,
+		dashArray: dash && dash.length > 0 ? dash : undefined,
+	});
+}
+
+function drawWave(
+	page: PDFPage,
+	pageHeightPt: number,
+	color: ReturnType<typeof rgb>,
+	thickness: number,
+	dash: number[] | undefined,
+	x: number,
+	midY: number,
+	width: number,
+	amp: number,
+): void {
 	const step = 0.6;
 	const period = 3.2;
 	for (let i = 0; i < width; i += step) {
@@ -237,16 +277,25 @@ function drawWave(pdf: jsPDF, x: number, midY: number, width: number, amp: numbe
 		const x1 = x + Math.min(width, i + step);
 		const y0 = midY + Math.sin((i / period) * Math.PI * 2) * (amp / 2);
 		const y1 = midY + Math.sin(((i + step) / period) * Math.PI * 2) * (amp / 2);
-		pdf.line(x0, y0, x1, y1);
+		strokeLine(page, pageHeightPt, color, thickness, dash, x0, y0, x1, y1);
 	}
 }
 
-function drawHatch(pdf: jsPDF, x: number, y: number, width: number, height: number): void {
+function drawHatch(
+	page: PDFPage,
+	pageHeightPt: number,
+	color: ReturnType<typeof rgb>,
+	thickness: number,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+): void {
 	const step = 1.3;
 	for (let i = 0; i < width; i += step) {
 		const x0 = x + i;
 		const x1 = x + Math.min(width, i + step);
-		pdf.line(x0, y + height, x1, y);
+		strokeLine(page, pageHeightPt, color, thickness, undefined, x0, y + height, x1, y);
 	}
 }
 

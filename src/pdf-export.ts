@@ -1,8 +1,8 @@
 import { App, Notice, Platform, TFile } from "obsidian";
 import html2canvas from "html2canvas";
+import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 
 export { isPhoneSession } from "./session";
-import { jsPDF } from "jspdf";
 import type { PaginaSettings, TimestampFormat } from "./types";
 import { borderExtentMm, drawBorderBand } from "./header-borders";
 import {
@@ -52,6 +52,12 @@ export interface BuildPdfResult {
 export type PdfProgress = (message: string) => void;
 
 const RASTER_PAGE_TIMEOUT_MS = 45_000;
+
+const PT_PER_MM = 72 / 25.4;
+
+function pt(mm: number): number {
+	return mm * PT_PER_MM;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -214,12 +220,10 @@ export async function buildPdfBytesRaster(
 		const totalPages = Math.max(1, Math.ceil(totalHeight / pageHeight));
 		const scale = captureScale(contentWidth, Math.min(pageHeight, totalHeight));
 
-		const pdf = new jsPDF({
-			orientation: layout.pageWidthMm >= layout.pageHeightMm ? "landscape" : "portrait",
-			unit: "mm",
-			format: [layout.pageWidthMm, layout.pageHeightMm],
-			compress: true,
-		});
+		const pdf = await PDFDocument.create();
+		const font = await pdf.embedFont(StandardFonts.Helvetica);
+		const pageWidthPt = pt(layout.pageWidthMm);
+		const pageHeightPt = pt(layout.pageHeightMm);
 
 		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const now = new Date();
@@ -232,9 +236,7 @@ export async function buildPdfBytesRaster(
 				onProgress?.(`Pagina: exporting PDF… page ${pageIndex + 1}/${totalPages}`);
 				await yieldToUi();
 
-				if (pageIndex > 0) {
-					pdf.addPage([layout.pageWidthMm, layout.pageHeightMm]);
-				}
+				const page = pdf.addPage([pageWidthPt, pageHeightPt]);
 
 				const srcY = pageIndex * pageHeight;
 				const srcH = Math.min(pageHeight, totalHeight - srcY);
@@ -275,15 +277,15 @@ export async function buildPdfBytesRaster(
 					);
 
 					const imgHeightMm = (srcH / contentWidth) * layout.contentWidthMm;
-					const jpeg = strip.toDataURL("image/jpeg", 0.72);
-					pdf.addImage(
-						jpeg,
-						"JPEG",
-						layout.marginLeftMm,
-						layout.marginTopMm,
-						layout.contentWidthMm,
-						Math.min(imgHeightMm, layout.contentHeightMm),
-					);
+					const jpeg = await pdf.embedJpg(strip.toDataURL("image/jpeg", 0.72));
+					const imgHeightPt = pt(imgHeightMm);
+					const drawHeight = Math.min(imgHeightPt, pt(layout.contentHeightMm));
+					page.drawImage(jpeg, {
+						x: pt(layout.marginLeftMm),
+						y: pageHeightPt - pt(layout.marginTopMm) - drawHeight,
+						width: pt(layout.contentWidthMm),
+						height: drawHeight,
+					});
 				} catch (error) {
 					console.error("Pagina: raster capture failed", error);
 					const message = error instanceof Error ? error.message : String(error);
@@ -308,7 +310,7 @@ export async function buildPdfBytesRaster(
 					frontmatter,
 					now,
 				};
-				drawHeaderFooter(pdf, settings, layout, varCtx);
+				drawHeaderFooter(page, pageHeightPt, font, settings, layout, varCtx);
 			}
 		} finally {
 			rendered.printEl.removeClass("pagina-clip");
@@ -319,7 +321,7 @@ export async function buildPdfBytesRaster(
 
 		clampOutlinePages(outlines, totalPages - 1);
 
-		const raw = new Uint8Array(pdf.output("arraybuffer"));
+		const raw = await pdf.save();
 		const processed = await applyPdfPostProcess(copyBuffer(raw), {
 			outlines,
 			tagged: settings.generateTaggedPDF,
@@ -557,16 +559,15 @@ function appendPrintSlot(
 		.replace(/\{\{\s*page\s*\}\}/gi, pageToken)
 		.replace(/\{\{\s*pages\s*\}\}/gi, pagesToken);
 	const rendered = renderTemplate(marked, { ...ctx, datetimeFormat });
-	const doc = parent.ownerDocument;
 	for (const piece of rendered.split(new RegExp(`(${pageToken}|${pagesToken})`))) {
 		if (!piece) continue;
 		if (piece === pageToken || piece === pagesToken) {
-			const span = doc.createElement("span");
-			span.className = piece === pageToken ? "pagina-page-num" : "pagina-pages-num";
-			parent.appendChild(span);
+			parent.appendChild(
+				createSpan({ cls: piece === pageToken ? "pagina-page-num" : "pagina-pages-num" }),
+			);
 			continue;
 		}
-		parent.appendChild(doc.createTextNode(piece));
+		parent.appendText(piece);
 	}
 }
 
@@ -577,8 +578,7 @@ function appendPrintBand(
 	ctx: VariableContext,
 ): void {
 	if (!slots.left && !slots.center && !slots.right) return;
-	const band = doc.createElement("div");
-	band.className = `pagina-run-${kind}`;
+	const band = createDiv({ cls: `pagina-run-${kind}` });
 	band.style.color = slots.textColor || "#555555";
 	if (slots.borderStyle && slots.borderStyle !== "none") {
 		const border = `1px solid ${slots.borderColor || "#000000"}`;
@@ -586,12 +586,11 @@ function appendPrintBand(
 		else band.style.borderTop = border;
 	}
 	for (const align of ["left", "center", "right"] as const) {
-		const cell = doc.createElement("div");
-		cell.className = align;
+		const cell = band.createDiv({ cls: align });
 		appendPrintSlot(cell, slots[align], ctx, slots.datetimeFormat);
-		band.appendChild(cell);
 	}
-	doc.body.appendChild(band);
+	doc.body.appendChild(doc.importNode(band, true));
+	band.remove();
 }
 
 function mountPrintFrame(
@@ -601,9 +600,9 @@ function mountPrintFrame(
 	settings: PaginaSettings,
 	ctx: VariableContext,
 ): void {
-	const titleEl = doc.createElement("title");
-	titleEl.textContent = title;
-	doc.head.appendChild(titleEl);
+	const titleEl = createEl("title", { text: title });
+	doc.head.appendChild(doc.importNode(titleEl, true));
+	titleEl.remove();
 	const sheet = new CSSStyleSheet();
 	sheet.replaceSync(css);
 	doc.adoptedStyleSheets = [sheet];
@@ -687,14 +686,14 @@ function str(value: unknown): string {
 }
 
 function drawHeaderFooter(
-	pdf: jsPDF,
+	page: PDFPage,
+	pageHeightPt: number,
+	font: PDFFont,
 	settings: PaginaSettings,
 	layout: PageLayout,
 	ctx: VariableContext,
 ): void {
-	pdf.setFontSize(9);
-	pdf.setTextColor(80);
-
+	const ink = rgb(80 / 255, 80 / 255, 80 / 255);
 	const contentLeft = layout.marginLeftMm;
 	const contentWidth = layout.contentWidthMm;
 	const contentRight = contentLeft + contentWidth;
@@ -703,10 +702,11 @@ function drawHeaderFooter(
 	if (settings.displayHeader) {
 		const borderMm = borderExtentMm(settings.header.borderStyle);
 		const textY = headerBaselineFromTopMm();
-		drawSlots(pdf, settings.header, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
+		drawSlots(page, pageHeightPt, font, ink, settings.header, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
 		if (borderMm > 0) {
 			drawBorderBand(
-				pdf,
+				page,
+				pageHeightPt,
 				settings.header.borderStyle,
 				settings.header.borderColor,
 				contentLeft,
@@ -720,7 +720,8 @@ function drawHeaderFooter(
 		const textY = layout.pageHeightMm - footerBaselineFromBottomMm();
 		if (borderMm > 0) {
 			drawBorderBand(
-				pdf,
+				page,
+				pageHeightPt,
 				settings.footer.borderStyle,
 				settings.footer.borderColor,
 				contentLeft,
@@ -728,12 +729,15 @@ function drawHeaderFooter(
 				contentWidth,
 			);
 		}
-		drawSlots(pdf, settings.footer, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
+		drawSlots(page, pageHeightPt, font, ink, settings.footer, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
 	}
 }
 
 function drawSlots(
-	pdf: jsPDF,
+	page: PDFPage,
+	pageHeightPt: number,
+	font: PDFFont,
+	ink: ReturnType<typeof rgb>,
 	slots: { left: string; center: string; right: string; datetimeFormat?: string },
 	leftX: number,
 	centerX: number,
@@ -743,20 +747,59 @@ function drawSlots(
 	ctx: VariableContext,
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
-	const left = renderTemplate(slots.left, slotCtx);
-	const center = renderTemplate(slots.center, slotCtx);
-	const right = renderTemplate(slots.right, slotCtx);
 	const colW = maxWidth / 3;
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left");
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center");
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right");
+}
 
-	if (left) {
-		pdf.text(left, leftX, y, { align: "left", maxWidth: colW });
+function drawSlot(
+	page: PDFPage,
+	pageHeightPt: number,
+	font: PDFFont,
+	ink: ReturnType<typeof rgb>,
+	text: string,
+	anchorMm: number,
+	yMm: number,
+	maxWidthMm: number,
+	align: "left" | "center" | "right",
+): void {
+	const printable = winAnsi(text);
+	if (!printable) return;
+	const size = 9;
+	let width = 0;
+	try {
+		width = font.widthOfTextAtSize(printable, size);
+	} catch {
+		return;
 	}
-	if (center) {
-		pdf.text(center, centerX, y, { align: "center", maxWidth: colW });
+	const used = Math.min(width, pt(maxWidthMm));
+	let x = pt(anchorMm);
+	if (align === "center") x = pt(anchorMm) - used / 2;
+	if (align === "right") x = pt(anchorMm) - used;
+	try {
+		page.drawText(printable, {
+			x,
+			y: pageHeightPt - pt(yMm),
+			size,
+			font,
+			color: ink,
+			maxWidth: pt(maxWidthMm),
+			lineHeight: size * 1.2,
+		});
+	} catch {
+		// The raster fallback uses Helvetica. Skip a slot it cannot encode.
 	}
-	if (right) {
-		pdf.text(right, rightX, y, { align: "right", maxWidth: colW });
+}
+
+function winAnsi(text: string): string {
+	let out = "";
+	for (const ch of text) {
+		if (ch.length !== 1) continue;
+		const code = ch.charCodeAt(0);
+		if (code === 9 || code === 10 || code === 13 || (code >= 32 && code <= 255)) out += ch;
 	}
+	return out;
 }
 
 function suggestedPdfName(file: TFile, timestampFormat: TimestampFormat): string {
