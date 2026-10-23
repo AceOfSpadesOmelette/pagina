@@ -1,12 +1,10 @@
 /**
- * WOFF2 → TrueType via the bundled Google woff2 wasm build
- * (fonteditor-core / woff2-wasm). Chromium's header document cannot load a
- * vault `@font-face`, so the export embeds this TrueType instead.
- * `woff2.cjs` and `woff2.wasm` sit next to main.js.
- *
- * Node APIs are required only inside loadModule() so the plugin can load on
- * mobile (Capacitor), where raster export does not need this decoder.
+ * WOFF2 → TrueType via the bundled Google woff2 wasm build.
+ * The decoder and wasm bytes are compiled into main.js.
  */
+
+import wasmBinary from "../woff2.wasm";
+import woff2Factory from "../woff2.cjs";
 
 interface WoffVector {
 	size: () => number;
@@ -18,63 +16,46 @@ interface WoffModule {
 	onRuntimeInitialized?: () => void;
 }
 
-let assetDir = "";
+type ProcessListener = (...args: unknown[]) => void;
+
+const factory = woff2Factory;
 let ready: Promise<WoffModule> | null = null;
 
-export function setWoff2AssetDir(dir: string): void {
-	if (dir && dir !== assetDir) {
-		assetDir = dir;
-		ready = null;
+function snapshotUncaught(): ProcessListener[] {
+	return process.listeners("uncaughtException") as unknown as ProcessListener[];
+}
+
+function snapshotUnhandled(): ProcessListener[] {
+	return process.listeners("unhandledRejection") as unknown as ProcessListener[];
+}
+
+function restoreUncaught(previous: ProcessListener[]): void {
+	process.removeAllListeners("uncaughtException");
+	for (const listener of previous) {
+		process.on("uncaughtException", listener);
 	}
 }
 
-function decoderDir(): string {
-	if (assetDir) return assetDir;
-	if (typeof __dirname === "string" && __dirname) return __dirname;
-	throw new Error("Pagina font decoder is not installed");
-}
-
-function nodeRequire(): NodeRequire {
-	// Lazy: createRequire / process.execPath must not run at module load on mobile.
-	const { createRequire } = require("module") as typeof import("module");
-	const filename =
-		typeof __filename === "string" && __filename
-			? __filename
-			: typeof process !== "undefined" && process.execPath
-				? process.execPath
-				: "";
-	if (!filename) {
-		throw new Error("Node require is not available");
+function restoreUnhandled(previous: ProcessListener[]): void {
+	process.removeAllListeners("unhandledRejection");
+	for (const listener of previous) {
+		process.on("unhandledRejection", listener);
 	}
-	return createRequire(filename);
-}
-
-function restoreProcessListeners(event: "uncaughtException" | "unhandledRejection", previous: Function[]): void {
-	process.removeAllListeners(event);
-	for (const listener of previous) process.on(event, listener as (...args: unknown[]) => void);
 }
 
 function loadModule(): Promise<WoffModule> {
 	if (!ready) {
 		const pending = new Promise<WoffModule>((resolve, reject) => {
 			try {
-				const req = nodeRequire();
-				const fs = req("fs") as typeof import("fs");
-				const path = req("path") as typeof import("path");
-				const dir = decoderDir();
-				const factory = req(path.join(dir, "woff2.cjs")) as (opts: Record<string, unknown>) => WoffModule;
-				const wasm = fs.readFileSync(path.join(dir, "woff2.wasm"));
-				const uncaught = process.listeners("uncaughtException");
-				const unhandled = process.listeners("unhandledRejection");
-				const mod = factory({ wasmBinary: wasm });
-				// The decoder traps process errors and rethrows them forever. Put the previous handlers back.
-				restoreProcessListeners("uncaughtException", uncaught);
-				restoreProcessListeners("unhandledRejection", unhandled);
-				const timer = setTimeout(() => reject(new Error("WOFF2 decoder timed out")), 15000);
+				const uncaught = snapshotUncaught();
+				const unhandled = snapshotUnhandled();
+				const mod = factory({ wasmBinary });
+				restoreUncaught(uncaught);
+				restoreUnhandled(unhandled);
+				const timer = window.setTimeout(() => reject(new Error("WOFF2 decoder timed out")), 15000);
 				mod.onRuntimeInitialized = () => {
-					clearTimeout(timer);
+					window.clearTimeout(timer);
 					const woff2Dec = mod.woff2Dec.bind(mod);
-					// The module object is thenable. Resolve with a plain wrapper instead.
 					resolve({ woff2Dec });
 				};
 			} catch (error) {

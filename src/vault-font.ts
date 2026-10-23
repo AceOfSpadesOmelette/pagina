@@ -1,4 +1,4 @@
-import { decodeWoff2, setWoff2AssetDir } from "./woff2-ttf";
+import { decodeWoff2 } from "./woff2-ttf";
 
 interface FontFaceHit {
 	family: string;
@@ -8,8 +8,8 @@ interface FontFaceHit {
 }
 
 export interface VaultFontFiles {
-	basePath: string;
 	configDir: string;
+	read: (normalizedPath: string) => Promise<string>;
 }
 
 export interface LoadedFace {
@@ -20,14 +20,9 @@ export interface LoadedFace {
 
 const decoded = new Map<string, Promise<LoadedFace>>();
 
-/** Folder that contains woff2.cjs and woff2.wasm, usually the plugin directory. */
-export function usePluginFontDir(dir: string | undefined): void {
-	if (dir) setWoff2AssetDir(dir);
-}
-
 /** `textFontFamily` from the vault's appearance.json, when that file can be read. */
-export function vaultTextFontFamily(files: VaultFontFiles | undefined): string {
-	return readAppearance(files).textFontFamily;
+export async function vaultTextFontFamily(files: VaultFontFiles | undefined): Promise<string> {
+	return (await readAppearance(files)).textFontFamily;
 }
 
 /**
@@ -36,7 +31,7 @@ export function vaultTextFontFamily(files: VaultFontFiles | undefined): string {
  * `bytes` is null when the name is a system font Chromium can already use.
  */
 export function loadEmbeddableFont(familyStack: string, files?: VaultFontFiles): Promise<LoadedFace> {
-	const key = `${files?.basePath ?? ""}|${files?.configDir ?? ""}|${familyStack.trim().toLowerCase()}`;
+	const key = `${files?.configDir ?? ""}|${familyStack.trim().toLowerCase()}`;
 	if (!familyStack.trim()) return Promise.resolve({ bytes: null });
 	let pending = decoded.get(key);
 	if (!pending) {
@@ -52,7 +47,7 @@ export function loadEmbeddableFont(familyStack: string, files?: VaultFontFiles):
 async function embedMatchingFace(familyStack: string, files?: VaultFontFiles): Promise<LoadedFace> {
 	const wanted = fontFamilyNames(familyStack);
 	if (wanted.length === 0) return { bytes: null };
-	const hits = collectFontFaces(files);
+	const hits = await collectFontFaces(files);
 	for (const name of wanted) {
 		const matches = hits.filter((hit) => familyMatches(hit.family, name));
 		matches.sort((a, b) => weightScore(a) - weightScore(b));
@@ -96,7 +91,7 @@ function weightScore(hit: FontFaceHit): number {
 	return 2;
 }
 
-function collectFontFaces(files?: VaultFontFiles): FontFaceHit[] {
+async function collectFontFaces(files?: VaultFontFiles): Promise<FontFaceHit[]> {
 	const hits: FontFaceHit[] = [];
 	const seen = new Set<string>();
 	const addCss = (css: string) => {
@@ -107,7 +102,7 @@ function collectFontFaces(files?: VaultFontFiles): FontFaceHit[] {
 			hits.push(hit);
 		}
 	};
-	for (const css of snippetCss(files)) addCss(css);
+	for (const css of await snippetCss(files)) addCss(css);
 	if (typeof document === "undefined") return hits;
 	for (const node of Array.from(document.querySelectorAll("style"))) {
 		addCss(node.textContent ?? "");
@@ -127,12 +122,10 @@ function collectFontFaces(files?: VaultFontFiles): FontFaceHit[] {
 	return hits;
 }
 
-function readAppearance(files: VaultFontFiles | undefined): { textFontFamily: string; snippets: string[] } {
-	if (!files?.basePath) return { textFontFamily: "", snippets: [] };
+async function readAppearance(files: VaultFontFiles | undefined): Promise<{ textFontFamily: string; snippets: string[] }> {
+	if (!files) return { textFontFamily: "", snippets: [] };
 	try {
-		const fs = require("fs") as typeof import("fs");
-		const path = require("path") as typeof import("path");
-		const raw = fs.readFileSync(path.join(files.basePath, files.configDir, "appearance.json"), "utf8");
+		const raw = await files.read(`${files.configDir}/appearance.json`);
 		const parsed = JSON.parse(raw) as { textFontFamily?: unknown; enabledCssSnippets?: unknown };
 		const snippets = Array.isArray(parsed.enabledCssSnippets)
 			? parsed.enabledCssSnippets.map((name) => String(name))
@@ -143,15 +136,13 @@ function readAppearance(files: VaultFontFiles | undefined): { textFontFamily: st
 	}
 }
 
-function snippetCss(files: VaultFontFiles | undefined): string[] {
-	const appearance = readAppearance(files);
-	if (!files?.basePath || appearance.snippets.length === 0) return [];
-	const fs = require("fs") as typeof import("fs");
-	const path = require("path") as typeof import("path");
+async function snippetCss(files: VaultFontFiles | undefined): Promise<string[]> {
+	const appearance = await readAppearance(files);
+	if (!files || appearance.snippets.length === 0) return [];
 	const chunks: string[] = [];
 	for (const name of appearance.snippets) {
 		try {
-			chunks.push(fs.readFileSync(path.join(files.basePath, files.configDir, "snippets", `${name}.css`), "utf8"));
+			chunks.push(await files.read(`${files.configDir}/snippets/${name}.css`));
 		} catch {
 			/* snippet listed but missing */
 		}

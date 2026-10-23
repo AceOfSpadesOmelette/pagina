@@ -210,7 +210,8 @@ export class PaginaExportModal extends Modal {
 		const display = show ? "block" : "none";
 		for (const root of [this.rendered?.printEl, this.previewClone]) {
 			root?.querySelectorAll("h1.__title__").forEach((el) => {
-				(el as HTMLElement).style.display = display;
+				if (!el.instanceOf(HTMLElement)) return;
+				el.style.display = display;
 			});
 		}
 	}
@@ -219,8 +220,7 @@ export class PaginaExportModal extends Modal {
 		for (const root of [this.rendered?.printEl, this.previewClone]) {
 			if (!root) continue;
 			applyH1StyleClasses(root, this.draft);
-			const content =
-				(root.querySelector(".markdown-preview-view") as HTMLElement | null) ?? root;
+			const content = root.querySelector<HTMLElement>(".markdown-preview-view") ?? root;
 			prepareConspectusForPrint(content);
 		}
 	}
@@ -302,15 +302,8 @@ export class PaginaExportModal extends Modal {
 		this.htmlWrap.empty();
 		const item = this.htmlWrap.createDiv({ cls: "print-preview-item" });
 		const clone = this.rendered.printEl.cloneNode(true) as HTMLElement;
-		clone.style.position = "relative";
-		clone.style.left = "0";
-		clone.style.top = "0";
-		clone.style.visibility = "visible";
-		clone.style.display = "block";
-		clone.style.zIndex = "auto";
-		clone.style.pointerEvents = "auto";
-		clone.style.height = "auto";
-		clone.style.overflow = "visible";
+		clone.removeClass("pagina-parked-print");
+		clone.addClass("pagina-preview-clone");
 		item.appendChild(clone);
 		this.previewClone = clone;
 	}
@@ -391,15 +384,11 @@ export class PaginaExportModal extends Modal {
 
 	private async paintPdf(bytes: Uint8Array): Promise<void> {
 		this.pdfWrap.empty();
-		const pdfjsLib = await loadPdfJs();
-		const data = bytes.slice();
-		const task = pdfjsLib.getDocument({ data });
-		const pdf = task.promise ? await task.promise : await task;
-
+		const pdf = await openPdfDocument(bytes);
 		for (let i = 1; i <= pdf.numPages; i++) {
 			const page = await pdf.getPage(i);
 			const viewport = page.getViewport({ scale: Platform.isMobile ? 1 : 2.5 });
-			const canvas = document.createElement("canvas");
+			const canvas = createEl("canvas");
 			const context = canvas.getContext("2d");
 			if (!context) continue;
 			canvas.width = viewport.width;
@@ -407,7 +396,7 @@ export class PaginaExportModal extends Modal {
 			const wrapper = this.pdfWrap.createDiv({ cls: "pdf-canvas-page" });
 			wrapper.appendChild(canvas);
 			const rendered = page.render({ canvasContext: context, viewport });
-			if (rendered?.promise) await rendered.promise;
+			if (rendered.promise) await rendered.promise;
 		}
 	}
 
@@ -451,7 +440,7 @@ export class PaginaExportModal extends Modal {
 		const notice = new Notice("Pagina: exporting PDF…", 0);
 		const setProgress = (message: string) => {
 			try {
-				notice.noticeEl.setText(message);
+				notice.messageEl.setText(message);
 			} catch {
 				/* notice already dismissed */
 			}
@@ -504,4 +493,38 @@ export class PaginaExportModal extends Modal {
 			this.setExportBusy(false);
 		}
 	}
+}
+
+interface PdfViewport {
+	width: number;
+	height: number;
+}
+
+interface PdfPageProxy {
+	getViewport(params: { scale: number }): PdfViewport;
+	render(params: { canvasContext: CanvasRenderingContext2D; viewport: PdfViewport }): { promise?: Promise<void> };
+}
+
+interface PdfDocumentProxy {
+	numPages: number;
+	getPage(pageNumber: number): Promise<PdfPageProxy>;
+}
+
+interface PdfLoadTask {
+	promise?: Promise<PdfDocumentProxy>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+async function openPdfDocument(bytes: Uint8Array): Promise<PdfDocumentProxy> {
+	const loaded: unknown = await (loadPdfJs() as Promise<unknown>);
+	if (!isRecord(loaded) || typeof loaded.getDocument !== "function") {
+		throw new Error("PDF preview is unavailable");
+	}
+	const getDocument = loaded.getDocument as (params: { data: Uint8Array }) => PdfLoadTask | Promise<PdfDocumentProxy>;
+	const task = getDocument({ data: bytes.slice() });
+	if (isRecord(task) && task.promise instanceof Promise) return task.promise as Promise<PdfDocumentProxy>;
+	return task as Promise<PdfDocumentProxy>;
 }

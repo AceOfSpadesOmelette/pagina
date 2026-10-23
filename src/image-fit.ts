@@ -1,3 +1,5 @@
+import "obsidian";
+
 /**
  * Note image sizes such as `![[file.png|1000]]` and the printable content box.
  * Requested pixels are stamped on the rendered embed, then scaled down to fit.
@@ -194,7 +196,7 @@ function positiveAttr(el: HTMLElement, name: string): number | undefined {
 }
 
 function targetImage(el: HTMLElement): HTMLImageElement | null {
-	if (el instanceof HTMLImageElement) return el;
+	if (el.instanceOf(HTMLImageElement)) return el;
 	const img = el.querySelector("img");
 	if (!(img instanceof HTMLImageElement) || img.classList.contains("__canvas__")) return null;
 	return img;
@@ -237,21 +239,14 @@ function applyFittedSize(el: HTMLElement, img: HTMLImageElement | null, fitted: 
 	const width = px(fitted.width);
 	const height = explicitBox ? px(fitted.height) : null;
 	el.style.width = width;
-	el.style.maxWidth = "100%";
+	el.addClass("pagina-fit-bound");
 	el.style.height = height ?? "auto";
-	if (height) el.style.maxHeight = "100%";
-	else el.style.removeProperty("max-height");
+	el.toggleClass("pagina-fit-limit", Boolean(height));
 
-	if (!img || img === el) {
-		if (height) el.style.objectFit = "fill";
-		else el.style.removeProperty("object-fit");
-		return;
-	}
-	img.style.width = "100%";
-	img.style.maxWidth = "100%";
+	if (!img || img === el) return;
+	img.addClass("pagina-fit-img");
 	img.style.height = height ? "100%" : "auto";
-	if (height) img.style.objectFit = "fill";
-	else img.style.removeProperty("object-fit");
+	img.toggleClass("pagina-fit-fill", Boolean(height));
 }
 
 function px(value: number): string {

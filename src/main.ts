@@ -3,7 +3,6 @@ import { PaginaExportModal } from "./export-modal";
 import { isPhoneSession } from "./session";
 import { PaginaSettingTab } from "./settings";
 import { DEFAULT_SETTINGS, normalizeSettings, type PaginaSettings } from "./types";
-import { usePluginFontDir } from "./vault-font";
 
 const MOBILE_DISABLED_NOTICE =
 	"Pagina PDF export is desktop-only for now (mobile export is not stable yet).";
@@ -12,14 +11,12 @@ export default class PaginaPlugin extends Plugin {
 	settings: PaginaSettings = { ...DEFAULT_SETTINGS };
 
 	async onload(): Promise<void> {
-		const pluginDir = (this.manifest as { dir?: string }).dir;
-		if (pluginDir) usePluginFontDir(pluginDir);
 		await this.loadSettings();
 
 		this.addSettingTab(new PaginaSettingTab(this.app, this));
 
 		this.addCommand({
-			id: "pagina-export-current-note",
+			id: "export-current-note",
 			name: "Export current note to PDF",
 			checkCallback: (checking) => {
 				if (isPhoneSession()) return false;
@@ -39,7 +36,7 @@ export default class PaginaPlugin extends Plugin {
 			}
 			const file = this.getActiveMarkdownFile();
 			if (!file) {
-				new Notice("Pagina: open a markdown note to export");
+				new Notice("Pagina: open a Markdown note to export");
 				return;
 			}
 			this.openExportModal(file);
@@ -51,7 +48,7 @@ export default class PaginaPlugin extends Plugin {
 				if (!(file instanceof TFile) || file.extension !== "md") return;
 				menu.addItem((item) => {
 					item
-						.setTitle("Export to PDF (Pagina)")
+						.setTitle("Export to PDF (pagina)")
 						.setIcon("file-text")
 						.setSection("action")
 						.onClick(() => {
@@ -68,7 +65,7 @@ export default class PaginaPlugin extends Plugin {
 				if (!file) return;
 				menu.addItem((item) => {
 					item
-						.setTitle("Export to PDF (Pagina)")
+						.setTitle("Export to PDF (pagina)")
 						.setIcon("file-text")
 						.onClick(() => {
 							this.openExportModal(file);
@@ -78,10 +75,8 @@ export default class PaginaPlugin extends Plugin {
 		);
 	}
 
-	async onunload(): Promise<void> {
+	onunload(): void {
 		document.querySelectorAll(".pagina-print").forEach((el) => el.remove());
-		document.getElementById("pagina-print-css")?.remove();
-		document.getElementById("pagina-theme-light-patch")?.remove();
 	}
 
 	openExportModal(file: TFile): void {

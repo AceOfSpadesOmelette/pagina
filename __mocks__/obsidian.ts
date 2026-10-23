@@ -89,3 +89,33 @@ export async function MarkdownRenderer_render(
 	_path: string,
 	_component: unknown,
 ): Promise<void> {}
+
+const nodeProto = Node.prototype as Node & {
+	instanceOf?: (ctor: new (...args: never[]) => unknown) => boolean;
+};
+if (typeof nodeProto.instanceOf !== "function") {
+	nodeProto.instanceOf = function instanceOf(ctor) {
+		return this instanceof ctor;
+	};
+}
+
+const htmlProto = HTMLElement.prototype as HTMLElement & {
+	addClass?: (cls: string) => void;
+	removeClass?: (cls: string) => void;
+	toggleClass?: (cls: string, force?: boolean) => void;
+	setCssProps?: (props: Record<string, string>) => void;
+};
+if (typeof htmlProto.addClass !== "function") {
+	htmlProto.addClass = function addClass(cls: string) {
+		this.classList.add(...cls.split(" "));
+	};
+	htmlProto.removeClass = function removeClass(cls: string) {
+		this.classList.remove(...cls.split(" "));
+	};
+	htmlProto.toggleClass = function toggleClass(cls: string, force?: boolean) {
+		this.classList.toggle(cls, force);
+	};
+	htmlProto.setCssProps = function setCssProps(props: Record<string, string>) {
+		for (const [key, value] of Object.entries(props)) this.style.setProperty(key, value);
+	};
+}

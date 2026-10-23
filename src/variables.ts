@@ -36,8 +36,9 @@ export function renderTemplate(template: string, ctx: VariableContext): string {
 		const fm = ctx.frontmatter as Record<string, unknown>;
 		const val = fm?.[k];
 		if (val == null) return "";
-		if (Array.isArray(val)) return val.join(", ");
-		return String(val);
+		if (Array.isArray(val)) return val.filter((item) => typeof item === "string").join(", ");
+		if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") return String(val);
+		return "";
 	});
 	return out;
 }

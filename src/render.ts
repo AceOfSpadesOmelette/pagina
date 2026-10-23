@@ -1,4 +1,4 @@
-import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, TFile } from "obsidian";
+import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, requestUrl, TFile } from "obsidian";
 import { sanitizeCssText } from "./css-sanitize";
 import { stampImageRequests } from "./image-fit";
 import {
@@ -9,7 +9,7 @@ import {
 	stripExportChrome,
 } from "./print-styles";
 
-const LIGHT_PATCH_ID = "pagina-theme-light-patch";
+let lightVarPatch: Record<string, string> = {};
 
 function vaultConfig(app: App, key: string): unknown {
 	return (app.vault as unknown as { getConfig?: (k: string) => unknown }).getConfig?.(key);
@@ -74,18 +74,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 interface MermaidApi {
-	run?: (opts: { nodes: ArrayLike<HTMLElement> }) => Promise<unknown> | unknown;
-	init?: (cfg: unknown, nodes: HTMLElement | HTMLElement[] | NodeListOf<HTMLElement>) => Promise<unknown> | unknown;
+	run?: (opts: { nodes: ArrayLike<HTMLElement> }) => Promise<void> | void;
+	init?: (cfg: unknown, nodes: HTMLElement | HTMLElement[] | NodeListOf<HTMLElement>) => Promise<void> | void;
 }
 
 function mermaidFences(el: HTMLElement): HTMLElement[] {
 	const nodes = new Set<HTMLElement>();
 	el.querySelectorAll("pre.language-mermaid, pre > code.language-mermaid, .language-mermaid").forEach((node) => {
-		const host = node instanceof HTMLElement && node.tagName === "CODE" ? node.parentElement : node;
+		const host = node.instanceOf(HTMLElement) && node.tagName === "CODE" ? node.parentElement : node;
 		if (host instanceof HTMLElement) nodes.add(host);
 	});
 	el.querySelectorAll(".mermaid").forEach((node) => {
-		if (node instanceof HTMLElement) nodes.add(node);
+		if (node.instanceOf(HTMLElement)) nodes.add(node);
 	});
 	return [...nodes];
 }
@@ -141,16 +141,8 @@ export async function fixWaitRender(markdown: string, viewEl: HTMLElement): Prom
 }
 
 function parkPrintHost(printEl: HTMLElement, widthPx: number): void {
-	printEl.style.position = "absolute";
-	printEl.style.left = "-10000px";
-	printEl.style.top = "0";
-	printEl.style.visibility = "visible";
-	printEl.style.display = "block";
-	printEl.style.zIndex = "-1";
+	printEl.addClass("pagina-parked-print");
 	printEl.style.width = `${Math.max(1, Math.round(widthPx))}px`;
-	printEl.style.height = "auto";
-	printEl.style.overflow = "visible";
-	printEl.style.pointerEvents = "none";
 }
 
 const MATH_COLOR_SEL = ".math, mjx-container, .katex";
@@ -191,11 +183,11 @@ export function preserveInlineColors(root: HTMLElement): void {
 				const stroke = node.getAttribute("stroke");
 				if (fill == null || isPaintable(fill)) {
 					node.setAttribute("fill", color);
-					if (node instanceof SVGElement) node.style.fill = color;
+					if (node.instanceOf(SVGElement)) node.style.fill = color;
 				}
 				if (isPaintable(stroke)) {
 					node.setAttribute("stroke", color);
-					if (node instanceof SVGElement) node.style.stroke = color;
+					if (node.instanceOf(SVGElement)) node.style.stroke = color;
 				}
 			});
 		}
@@ -206,7 +198,7 @@ export function fixCanvasToImage(el: HTMLElement): void {
 	for (const canvas of Array.from(el.querySelectorAll("canvas"))) {
 		try {
 			const data = canvas.toDataURL("image/png");
-			const img = document.createElement("img");
+			const img = createEl("img");
 			img.src = data;
 			for (const attr of Array.from(canvas.attributes)) {
 				if (attr.name === "width" || attr.name === "height" || attr.name === "style") {
@@ -289,7 +281,7 @@ function placeMarker(
 	const unit = units === "userSpaceOnUse" ? 1 : strokeWidth;
 	const deg = (angle * 180) / Math.PI;
 
-	const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+	const group = createSvg("g");
 	group.setAttribute("class", "pagina-arrowhead");
 	group.setAttribute(
 		"transform",
@@ -300,7 +292,7 @@ function placeMarker(
 		const tag = child.tagName.toLowerCase();
 		if (tag === "defs" || tag === "title" || tag === "desc") continue;
 		const clone = child.cloneNode(true) as Element;
-		if (clone instanceof SVGElement) {
+		if (clone.instanceOf(SVGElement)) {
 			const painted = getComputedStyle(child);
 			const edgePaint = getComputedStyle(edge);
 			const fill = painted.fill && painted.fill !== "none" ? painted.fill : edgePaint.stroke || "#000";
@@ -318,11 +310,11 @@ function placeMarker(
 /** Chromium print drops SVG markers, so copy each arrowhead into ordinary geometry. */
 export function materializeMermaidMarkers(root: HTMLElement): void {
 	root.querySelectorAll(".mermaid svg").forEach((node) => {
-		if (!(node instanceof SVGSVGElement)) return;
-		node.style.overflow = "visible";
+		if (!node.instanceOf(SVGSVGElement)) return;
+		node.classList.add("pagina-svg-visible");
 		const edges = Array.from(node.querySelectorAll("path, line"));
 		for (const edge of edges) {
-			if (!(edge instanceof SVGGeometryElement)) continue;
+			if (!(edge.instanceOf(SVGGeometryElement))) continue;
 			if (edge.closest(".pagina-arrowhead")) continue;
 			placeMarker(node, edge, "marker-end");
 			placeMarker(node, edge, "marker-start");
@@ -336,7 +328,7 @@ const SVG_PAINT_PROPS = ["fill", "stroke", "stroke-width", "stroke-linecap", "st
 function inlineSvgPaint(svg: SVGSVGElement): void {
 	const nodes = [svg, ...Array.from(svg.querySelectorAll("*"))];
 	for (const node of nodes) {
-		if (!(node instanceof SVGElement) && !(node instanceof HTMLElement)) continue;
+		if (!(node instanceof SVGElement) && !(node.instanceOf(HTMLElement))) continue;
 		const computed = getComputedStyle(node);
 		for (const prop of SVG_PAINT_PROPS) {
 			const value = computed.getPropertyValue(prop);
@@ -360,7 +352,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
  */
 async function rasterizeSvgs(el: HTMLElement): Promise<void> {
 	for (const node of Array.from(el.querySelectorAll(".mermaid svg"))) {
-		if (!(node instanceof SVGSVGElement)) continue;
+		if (!(node.instanceOf(SVGSVGElement))) continue;
 		let url = "";
 		try {
 			const rect = node.getBoundingClientRect();
@@ -375,7 +367,7 @@ async function rasterizeSvgs(el: HTMLElement): Promise<void> {
 			url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
 			const painted = await loadImage(url);
 			const scale = 2;
-			const canvas = document.createElement("canvas");
+			const canvas = createEl("canvas");
 			canvas.width = width * scale;
 			canvas.height = height * scale;
 			const ctx = canvas.getContext("2d");
@@ -383,7 +375,7 @@ async function rasterizeSvgs(el: HTMLElement): Promise<void> {
 			ctx.fillStyle = "#ffffff";
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 			ctx.drawImage(painted, 0, 0, canvas.width, canvas.height);
-			const img = document.createElement("img");
+			const img = createEl("img");
 			img.src = canvas.toDataURL("image/png");
 			img.classList.add("__canvas__");
 			img.style.width = `${width}px`;
@@ -403,14 +395,16 @@ async function rasterizeSvgs(el: HTMLElement): Promise<void> {
 
 const IMAGE_FETCH_TIMEOUT_MS = 10_000;
 
-async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
-	const controller = new AbortController();
-	const timer = window.setTimeout(() => controller.abort(), ms);
-	try {
-		return await fetch(url, { signal: controller.signal });
-	} finally {
-		window.clearTimeout(timer);
-	}
+async function inlineRemoteImage(url: string): Promise<string> {
+	const pending = requestUrl({ url, throw: true });
+	const res = await Promise.race([
+		pending,
+		new Promise<never>((_, reject) => {
+			window.setTimeout(() => reject(new Error("Image request timed out")), IMAGE_FETCH_TIMEOUT_MS);
+		}),
+	]);
+	const mime = (res.headers["content-type"] ?? "application/octet-stream").split(";")[0]?.trim() || "application/octet-stream";
+	return `data:${mime};base64,${arrayBufferToBase64(res.arrayBuffer)}`;
 }
 
 async function inlineImages(el: HTMLElement, app: App): Promise<void> {
@@ -420,10 +414,8 @@ async function inlineImages(el: HTMLElement, app: App): Promise<void> {
 			const src = img.getAttribute("src") ?? "";
 			if (!src || src.startsWith("data:")) return;
 			try {
-				if (src.startsWith("app://") || src.startsWith("http://") || src.startsWith("https://")) {
-					const res = await fetchWithTimeout(src, IMAGE_FETCH_TIMEOUT_MS);
-					const blob = await res.blob();
-					img.src = await blobToDataUrl(blob);
+				if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("app://")) {
+					img.src = await inlineRemoteImage(src);
 					return;
 				}
 			} catch {
@@ -464,15 +456,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	return btoa(binary);
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => resolve(String(reader.result));
-		reader.onerror = () => reject(reader.error);
-		reader.readAsDataURL(blob);
-	});
-}
-
 function registerHeadingKey(data: Map<string, string>, key: string, flag: string): void {
 	if (!key) return;
 	data.set(key, flag);
@@ -503,7 +486,7 @@ export function addHeadingAnchors(root: ParentNode): Map<string, string> {
 	root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((heading, i) => {
 		const el = heading as HTMLElement;
 		const flag = `${el.tagName.toLowerCase()}-${i}`;
-		const link = document.createElement("a");
+		const link = createEl("a");
 		link.setAttribute("href", `af://${flag}`);
 		link.className = "md-print-anchor";
 		link.dataset.flag = flag;
@@ -692,24 +675,28 @@ export function getDerivedLightVars(): Record<string, string> {
 }
 
 export function injectLightVarsPatch(vars: Record<string, string>): void {
-	document.getElementById(LIGHT_PATCH_ID)?.remove();
-	if (!vars || Object.keys(vars).length === 0) return;
-	const lines = Object.entries(vars).map(([prop, value]) => `${prop}: ${value};`);
-	const style = document.createElement("style");
-	style.id = LIGHT_PATCH_ID;
-	style.textContent = `.print.theme-light {\n${lines.join("\n")}\n}`;
-	document.head.appendChild(style);
+	lightVarPatch = vars && Object.keys(vars).length > 0 ? { ...vars } : {};
+	document.querySelectorAll(".pagina-print").forEach((node) => {
+		if (node.instanceOf(HTMLElement) && Object.keys(lightVarPatch).length > 0) {
+			node.setCssProps(lightVarPatch);
+		}
+	});
 }
 
 export function removeLightVarsPatch(): void {
-	document.getElementById(LIGHT_PATCH_ID)?.remove();
+	lightVarPatch = {};
+}
+
+function applyLightVars(printEl: HTMLElement): void {
+	if (Object.keys(lightVarPatch).length === 0) return;
+	printEl.setCssProps(lightVarPatch);
 }
 
 export function collectStyles(): string {
 	const cssTexts: string[] = [];
 	Array.from(document.styleSheets).forEach((sheet) => {
-		const owner = sheet.ownerNode as HTMLElement | null;
-		const id = owner?.id ?? "";
+		const owner = sheet.ownerNode;
+		const id = owner?.instanceOf(HTMLElement) ? owner.id : "";
 		if (id.startsWith("svelte-") || id.startsWith("pagina-")) return;
 		try {
 			Array.from(sheet.cssRules ?? []).forEach((rule) => {
@@ -764,20 +751,11 @@ export interface RenderedNote {
  * Render a note into `body > .print.theme-light > .markdown-preview-view`,
  * the structure Obsidian's print stylesheet and print-to-pdf expect.
  */
-function ensurePrintStyle(): void {
-	if (document.getElementById("pagina-print-css")) return;
-	const style = document.createElement("style");
-	style.id = "pagina-print-css";
-	style.textContent = PRINT_CSS;
-	document.head.appendChild(style);
-}
-
 export async function renderNoteForExport(opts: RenderNoteOptions): Promise<RenderedNote> {
 	const { app, file, includeTitle } = opts;
-	ensurePrintStyle();
 	const raw = await app.vault.cachedRead(file);
 	const markdown = injectBlockIds(app, file, raw);
-	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? ({} as FrontMatterCache);
+	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? ({});
 	const component = new Component();
 	component.load();
 
@@ -785,10 +763,7 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	applyH1StyleClasses(printEl, opts);
 	const hostWidth = opts.contentWidthPx ?? 800;
 	parkPrintHost(printEl, hostWidth);
-	if (opts.forRaster || opts.forPrint) {
-		const styleEl = printEl.createEl("style", { attr: { id: "pagina-export-styles" } });
-		styleEl.textContent = collectStyles();
-	}
+	applyLightVars(printEl);
 
 	const viewEl = printEl.createDiv({ cls: "markdown-preview-view markdown-rendered" });
 	viewEl.addClasses(cssclassesFrom(frontmatter));
@@ -829,6 +804,7 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	const dest = addHeadingAnchors(viewEl);
 	fixInternalAnchors(viewEl, dest, file.basename);
 	wireConspectusTocLinks(viewEl);
+	applyLightVars(printEl);
 
 	return {
 		printEl,

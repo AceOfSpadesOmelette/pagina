@@ -28,7 +28,7 @@ export function applyImportedSettings(target: PaginaSettings, next: PaginaSettin
 export function downloadSettingsJson(settings: PaginaSettings): void {
 	const blob = new Blob([settingsToJson(settings)], { type: "application/json" });
 	const url = URL.createObjectURL(blob);
-	const link = document.createElement("a");
+	const link = createEl("a");
 	link.href = url;
 	link.download = EXPORT_FILENAME;
 	link.click();

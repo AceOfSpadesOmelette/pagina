@@ -51,7 +51,7 @@ export function renderPaginaSettings(
 	new Setting(container).setName("Heading 1").setHeading();
 
 	new Setting(container)
-		.setName("Page break before H1")
+		.setName("Page break before h1")
 		.setDesc("Start a new page at each heading 1 after the first (not the file-name title).")
 		.addToggle((t) =>
 			t.setValue(settings.pageBreakBeforeH1).onChange((v) => {
@@ -61,7 +61,7 @@ export function renderPaginaSettings(
 		);
 
 	new Setting(container)
-		.setName("Center H1")
+		.setName("Center h1")
 		.setDesc("Horizontally center heading 1 text (not the file-name title).")
 		.addToggle((t) =>
 			t.setValue(settings.centerH1).onChange((v) => {
@@ -71,7 +71,7 @@ export function renderPaginaSettings(
 		);
 
 	new Setting(container)
-		.setName("Underline H1")
+		.setName("Underline h1")
 		.setDesc("Underline heading 1 text (not the file-name title).")
 		.addToggle((t) =>
 			t.setValue(settings.underlineH1).onChange((v) => {
@@ -164,7 +164,6 @@ export function renderPaginaSettings(
 			s
 				.setLimits(0, 200, 1)
 				.setValue(settings.downscalePercent)
-				.setDynamicTooltip()
 				.onChange((v) => {
 					settings.downscalePercent = v;
 					notify();
@@ -220,7 +219,7 @@ export function renderPaginaSettings(
 	new Setting(container)
 		.setName("Generate tagged PDF")
 		.setDesc(
-			"Experimental accessible MarkInfo flag. Image-based export may not fully meet PDF/UA.",
+			"Experimental accessible markinfo flag. Image-based export may not fully meet PDF/ua.",
 		)
 		.addToggle((t) =>
 			t.setValue(settings.generateTaggedPDF).onChange((v) => {
@@ -257,10 +256,10 @@ export function renderPaginaSettings(
 		.setDesc("Format for appending timestamp to the output file name")
 		.addDropdown((dd) => {
 			dd.addOption("none", "None");
-			dd.addOption("EPOCH", "EPOCH (Unix timestamp)");
+			dd.addOption("EPOCH", "Epoch (unix timestamp)");
 			dd.addOption("YYYYMMDD", "YYYYMMDD");
-			dd.addOption("YYYY-MM-DD", "YYYY-MM-DD");
-			dd.addOption("YYYYMMDD-HHMMSS", "YYYYMMDD-HHMMSS");
+			dd.addOption("YYYY-MM-DD", "Yyyy-mm-dd");
+			dd.addOption("YYYYMMDD-HHMMSS", "Yyyymmdd-hhmmss");
 			dd.setValue(settings.timestampFormat).onChange((v) => {
 				settings.timestampFormat = v as typeof settings.timestampFormat;
 				notify();
@@ -343,9 +342,7 @@ export function renderPaginaSettings(
 }
 
 function pickSettingsFile(onText: (text: string) => void): void {
-	const input = document.createElement("input");
-	input.type = "file";
-	input.accept = ".json,application/json";
+	const input = createEl("input", { type: "file", attr: { accept: ".json,application/json" } });
 	input.addEventListener("change", () => {
 		const file = input.files?.[0];
 		if (!file) return;
@@ -365,7 +362,7 @@ function addPairedText(
 	const setting = new Setting(container).setName(name);
 	for (const spec of [first, second]) {
 		setting.addText((t) => {
-			t.inputEl.style.width = "100px";
+			t.inputEl.addClass("pagina-mm-input");
 			t.setPlaceholder(spec.placeholder).setValue(spec.value).onChange(spec.onChange);
 		});
 	}
@@ -452,7 +449,7 @@ function addSlotSettings(
 		.setName(`${label} font`)
 		.setDesc(`Leave blank to match Obsidian: ${obsidianFontLabel()}`)
 		.addText((t) => {
-			t.setPlaceholder("e.g. Georgia, Times New Roman")
+			t.setPlaceholder("E.g. Georgia, times new roman")
 				.setValue(slots.fontFamily || "")
 				.onChange((v) => {
 					slots.fontFamily = v.trim();

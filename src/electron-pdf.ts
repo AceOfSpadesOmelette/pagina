@@ -1,23 +1,12 @@
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
+import electron from "electron";
 import { borderSvg } from "./header-borders";
 import { EM_MM, LINE_MM, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
 import type { PaginaSettings, TimestampFormat } from "./types";
 import { layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { formatTimestamp, renderTemplate, type VariableContext } from "./variables";
-
-interface ElectronDialogResult {
-	canceled: boolean;
-	filePath?: string;
-}
-
-interface ElectronLike {
-	remote?: {
-		dialog?: {
-			showSaveDialog: (opts: Record<string, unknown>) => Promise<ElectronDialogResult>;
-		};
-		shell?: { openPath: (p: string) => Promise<string> };
-	};
-	shell?: { openPath: (p: string) => Promise<string> };
-}
 
 interface IpcRendererLike {
 	send: (channel: string, ...args: unknown[]) => void;
@@ -40,9 +29,8 @@ function ipcFrom(target: object | null | undefined): IpcRendererLike | undefined
 	return (target as WithWin).win?.electron?.ipcRenderer;
 }
 
-function ipcFromRequire(): IpcRendererLike | undefined {
+function ipcFromModule(): IpcRendererLike | undefined {
 	try {
-		const electron = require("electron") as { ipcRenderer?: IpcRendererLike };
 		return electron.ipcRenderer;
 	} catch {
 		return undefined;
@@ -53,7 +41,7 @@ function getIpc(printEl?: HTMLElement): IpcRendererLike {
 	const viaWindow = (window as unknown as { electron?: { ipcRenderer?: IpcRendererLike } }).electron
 		?.ipcRenderer;
 	const ipc =
-		(printEl ? ipcFrom(printEl) : undefined) ?? ipcFrom(document.body) ?? viaWindow ?? ipcFromRequire();
+		(printEl ? ipcFrom(printEl) : undefined) ?? ipcFrom(document.body) ?? viaWindow ?? ipcFromModule();
 	if (!ipc) {
 		throw new Error("Electron IPC is not available");
 	}
@@ -62,12 +50,11 @@ function getIpc(printEl?: HTMLElement): IpcRendererLike {
 
 export function isElectronPrintAvailable(): boolean {
 	try {
-		const electron = require("electron") as ElectronLike;
-		const hasDialog = Boolean(electron?.remote?.dialog?.showSaveDialog);
+		const hasDialog = Boolean(electron.remote?.dialog?.showSaveDialog);
 		const hasIpc = Boolean(
 			(window as unknown as { electron?: { ipcRenderer?: IpcRendererLike } }).electron?.ipcRenderer ||
 				ipcFrom(document.body) ||
-				ipcFromRequire(),
+				ipcFromModule(),
 		);
 		return hasDialog && hasIpc;
 	} catch {
@@ -82,7 +69,6 @@ function suggestedFileName(basename: string, timestampFormat: TimestampFormat): 
 }
 
 export async function promptSavePath(basename: string, timestampFormat: TimestampFormat): Promise<string> {
-	const electron = require("electron") as ElectronLike;
 	const dialog = electron.remote?.dialog;
 	if (!dialog?.showSaveDialog) {
 		throw new Error("Save dialog is not available");
@@ -100,21 +86,15 @@ export async function promptSavePath(basename: string, timestampFormat: Timestam
 }
 
 export async function writePdfToPath(filePath: string, bytes: Uint8Array): Promise<void> {
-	const fs = require("fs").promises as {
-		writeFile: (path: string, data: Uint8Array) => Promise<void>;
-	};
 	await fs.writeFile(filePath, bytes);
 }
 
 export async function openPath(filePath: string): Promise<void> {
-	const electron = require("electron") as ElectronLike;
 	const shell = electron.remote?.shell ?? electron.shell;
 	await shell?.openPath(filePath);
 }
 
 export function tempPdfPath(filePath: string): string {
-	const os = require("os") as typeof import("os");
-	const path = require("path") as typeof import("path");
 	const safe = filePath.replace(/[/\\:]/g, "_");
 	return path.join(os.tmpdir(), `pagina-${safe}-${Date.now()}.pdf`);
 }
@@ -135,7 +115,7 @@ function chromiumSlot(template: string, ctx: VariableContext, datetimeFormat?: s
 export function obsidianTextFont(root?: ParentNode | null): string {
 	if (typeof document === "undefined") return "";
 	const note = root?.querySelector?.(".markdown-rendered");
-	const el = note instanceof HTMLElement ? note : document.body;
+	const el = note?.instanceOf(HTMLElement) ? note : document.body;
 	const computed = getComputedStyle(el).fontFamily?.trim();
 	if (computed) return computed;
 	return getComputedStyle(document.body).getPropertyValue("--font-text").trim();
@@ -338,18 +318,10 @@ export async function printElementToPdf(
 	return printMutex.run(async () => {
 		const ipc = getIpc(printEl);
 		const previousTitle = document.title;
-		const previousDisplay = printEl.style.display;
-		const previousVisibility = printEl.style.visibility;
-		printEl.style.display = "block";
-		printEl.style.visibility = "visible";
+		printEl.addClass("pagina-print-shown");
 		document.title = title;
 		await sleep(200);
 
-		const fs = require("fs").promises as {
-			access: (path: string) => Promise<void>;
-			readFile: (path: string) => Promise<Buffer>;
-			unlink: (path: string) => Promise<void>;
-		};
 		try {
 			await new Promise<void>((resolve, reject) => {
 				const timer = window.setTimeout(() => reject(new Error("print-to-pdf timed out")), 60000);
@@ -373,8 +345,7 @@ export async function printElementToPdf(
 			return bytes;
 		} finally {
 			void fs.unlink(filepath).catch(() => undefined);
-			printEl.style.display = previousDisplay;
-			printEl.style.visibility = previousVisibility;
+			printEl.removeClass("pagina-print-shown");
 			document.title = previousTitle;
 		}
 	});

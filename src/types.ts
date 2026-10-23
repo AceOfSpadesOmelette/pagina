@@ -156,7 +156,7 @@ function normalizeSlots(defaults: HeaderFooterSlots, raw?: Partial<HeaderFooterS
 }
 
 function normalizeDatetimeFormat(value: unknown): DatetimeFormat {
-	const raw = String(value ?? "locale");
+	const raw = typeof value === "string" ? value : "locale";
 	return DATETIME_FORMATS.some((entry) => entry.id === raw) ? (raw as DatetimeFormat) : "locale";
 }
 

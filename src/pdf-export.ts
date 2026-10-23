@@ -21,9 +21,9 @@ import {
 	insertH1PageBreakSpacers,
 	prepareConspectusForPrint,
 } from "./print-styles";
-import { applyH1StyleClasses, renderNoteForExport, type RenderedNote } from "./render";
+import { applyH1StyleClasses, collectStyles, renderNoteForExport, type RenderedNote } from "./render";
 import { renderTemplate, formatTimestamp, type VariableContext } from "./variables";
-import { prepareCloneForCapture } from "./css-sanitize";
+import { prepareCloneForCapture, sanitizeCssText } from "./css-sanitize";
 import {
 	applyPdfPostProcess,
 	buildOutlineTree,
@@ -42,7 +42,7 @@ import {
 	writePdfToPath,
 } from "./electron-pdf";
 import { stampHeaderFooter } from "./stamp-header-footer";
-import { loadEmbeddableFont, usePluginFontDir, vaultTextFontFamily, type VaultFontFiles } from "./vault-font";
+import { loadEmbeddableFont, vaultTextFontFamily, type VaultFontFiles } from "./vault-font";
 
 export interface BuildPdfResult {
 	bytes: Uint8Array;
@@ -63,14 +63,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 			},
 			(err) => {
 				window.clearTimeout(timer);
-				reject(err);
+				reject(err instanceof Error ? err : new Error("Export timed out"));
 			},
 		);
 	});
 }
 
 function yieldToUi(): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, 0));
+	return new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
 /** Lay the note out at the margin-adjusted column and fit images into that box. */
@@ -79,7 +79,7 @@ async function applyExportContentBox(rendered: RenderedNote, layout: PageLayout)
 	rendered.printEl.style.width = width;
 	rendered.contentEl.style.width = width;
 	rendered.contentEl.style.maxWidth = width;
-	rendered.contentEl.style.boxSizing = "border-box";
+	rendered.contentEl.addClass("pagina-border-box");
 	await fitStampedImages(rendered.contentEl, layout.contentWidthPx, layout.contentHeightPx);
 }
 
@@ -133,10 +133,9 @@ async function buildPdfBytesElectron(
 			frontmatter,
 			now: new Date(),
 		};
-		usePluginFontDir(pluginFontDir(app));
 		const files = vaultFontFiles(app);
 		const noteFont = obsidianTextFont(rendered.printEl);
-		const vaultFont = vaultTextFontFamily(files);
+		const vaultFont = await vaultTextFontFamily(files);
 		const headerChoice = (settings.header.fontFamily ?? "").trim() || vaultFont || noteFont;
 		const footerChoice = (settings.footer.fontFamily ?? "").trim() || vaultFont || noteFont;
 		const headerLoaded = settings.displayHeader ? await loadEmbeddableFont(headerChoice, files) : { bytes: null };
@@ -194,7 +193,7 @@ export async function buildPdfBytesRaster(
 	});
 
 	try {
-		rendered.printEl.style.display = "block";
+		rendered.printEl.addClass("pagina-print-shown");
 		await applyExportContentBox(rendered, layout);
 		const contentEl = rendered.contentEl;
 		void contentEl.offsetHeight;
@@ -244,7 +243,7 @@ export async function buildPdfBytesRaster(
 				let strip: HTMLCanvasElement | null = null;
 				let detached: DetachedNode[] = [];
 				try {
-					rendered.printEl.style.overflow = "hidden";
+					rendered.printEl.addClass("pagina-clip");
 					rendered.printEl.style.height = `${Math.ceil(srcH)}px`;
 					contentEl.style.transform = `translateY(${-srcY}px)`;
 					void contentEl.offsetHeight;
@@ -265,6 +264,9 @@ export async function buildPdfBytesRaster(
 							scrollX: 0,
 							scrollY: 0,
 							onclone: (clonedDoc) => {
+								const sheet = new CSSStyleSheet();
+								sheet.replaceSync(sanitizeCssText(collectStyles()));
+								clonedDoc.adoptedStyleSheets = [sheet];
 								prepareCloneForCapture(clonedDoc, settings.printBackground);
 							},
 						}),
@@ -309,6 +311,7 @@ export async function buildPdfBytesRaster(
 				drawHeaderFooter(pdf, settings, layout, varCtx);
 			}
 		} finally {
+			rendered.printEl.removeClass("pagina-clip");
 			rendered.printEl.style.overflow = prevOverflow;
 			rendered.printEl.style.height = prevHostHeight;
 			contentEl.style.transform = prevTransform;
@@ -354,7 +357,7 @@ function detachOffPageChildren(contentEl: HTMLElement, hostEl: HTMLElement): Det
 	const host = hostEl.getBoundingClientRect();
 	const detached: DetachedNode[] = [];
 	for (const node of Array.from(contentEl.children)) {
-		if (!(node instanceof HTMLElement) || node.tagName === "STYLE") continue;
+		if (!(node.instanceOf(HTMLElement)) || node.tagName === "STYLE") continue;
 		const box = node.getBoundingClientRect();
 		if (box.bottom <= host.top + 1 || box.top >= host.bottom - 1) {
 			detached.push({ parent: contentEl, node, next: node.nextSibling });
@@ -425,10 +428,10 @@ export async function exportNoteViaWebPrint(
 	});
 	applyH1StyleClasses(rendered.printEl, settings);
 
-	const iframe = document.createElement("iframe");
-	iframe.setAttribute("title", file.basename);
-	iframe.style.cssText =
-		"position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff;z-index:2147483646;";
+	const iframe = createEl("iframe", {
+		cls: "pagina-print-iframe",
+		attr: { title: file.basename },
+	});
 	document.body.appendChild(iframe);
 
 	let settled = false;
@@ -461,17 +464,12 @@ export async function exportNoteViaWebPrint(
 			frontmatter,
 			now: new Date(),
 		};
-		doc.open();
-		doc.write(printDocumentHtml(file.basename, page, margins, settings, ctx));
-		doc.close();
+		const css = printFrameCss(page, margins, settings);
+		mountPrintFrame(doc, file.basename, css, settings, ctx);
 
-		rendered.printEl.style.position = "static";
-		rendered.printEl.style.left = "auto";
-		rendered.printEl.style.top = "auto";
-		rendered.printEl.style.height = "auto";
-		rendered.printEl.style.zIndex = "auto";
-		rendered.printEl.style.pointerEvents = "auto";
-		rendered.printEl.style.transform = "";
+		rendered.printEl.removeClass("pagina-parked-print");
+		rendered.printEl.addClass("pagina-print-flow");
+		rendered.printEl.style.removeProperty("transform");
 		doc.body.appendChild(rendered.printEl);
 		await applyExportContentBox(rendered, computePageLayout(settings));
 		await waitForPrintImages(doc);
@@ -497,9 +495,7 @@ export async function exportNoteViaWebPrint(
 			throw new WebPrintUnavailableError();
 		}
 		onProgress?.("Pagina: choose Save as PDF…");
-		iframe.style.left = "-10000px";
-		iframe.style.width = "794px";
-		iframe.style.height = "1123px";
+		iframe.addClass("is-parked");
 	} catch (error) {
 		finish();
 		throw error;
@@ -523,57 +519,15 @@ export async function exportNoteWithoutElectron(
 	return sharePdfOutsideVault(app, file, bytes, settings, onProgress);
 }
 
-function escapeHtml(value: string): string {
-	return value
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
-}
-
-function slotHtml(template: string, ctx: VariableContext, datetimeFormat?: string): string {
-	const pageToken = "\u0001PAGINA_PAGE\u0001";
-	const pagesToken = "\u0001PAGINA_PAGES\u0001";
-	const marked = template
-		.replace(/\{\{\s*page\s*\}\}/gi, pageToken)
-		.replace(/\{\{\s*pages\s*\}\}/gi, pagesToken);
-	const rendered = renderTemplate(marked, { ...ctx, datetimeFormat });
-	return escapeHtml(rendered)
-		.replaceAll(pageToken, '<span class="pagina-page-num"></span>')
-		.replaceAll(pagesToken, '<span class="pagina-pages-num"></span>');
-}
-
-function runningBand(
-	kind: "header" | "footer",
-	slots: PaginaSettings["header"],
-	ctx: VariableContext,
-): string {
-	const left = slotHtml(slots.left, ctx, slots.datetimeFormat);
-	const center = slotHtml(slots.center, ctx, slots.datetimeFormat);
-	const right = slotHtml(slots.right, ctx, slots.datetimeFormat);
-	if (!left && !center && !right) return "";
-	const color = escapeHtml(slots.textColor || "#555555");
-	const borderColor = escapeHtml(slots.borderColor || "#000000");
-	const edge =
-		slots.borderStyle && slots.borderStyle !== "none"
-			? kind === "header"
-				? `border-bottom:1px solid ${borderColor};`
-				: `border-top:1px solid ${borderColor};`
-			: "";
-	return `<div class="pagina-run-${kind}" style="color:${color};${edge}"><div class="left">${left}</div><div class="center">${center}</div><div class="right">${right}</div></div>`;
-}
-
-function printDocumentHtml(
-	title: string,
+function printFrameCss(
 	page: { width: number; height: number },
 	margins: { top: number; bottom: number; left: number; right: number },
 	settings: PaginaSettings,
-	ctx: VariableContext,
 ): string {
 	const colorAdjust = settings.printBackground
 		? "-webkit-print-color-adjust:exact;print-color-adjust:exact;"
 		: "";
-	const css = `
+	return `
 @page { size: ${page.width}mm ${page.height}mm; margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm; }
 html, body { margin: 0; padding: 0; background: #fff; color: #222; ${colorAdjust} }
 .pagina-run-header, .pagina-run-footer {
@@ -589,9 +543,72 @@ html, body { margin: 0; padding: 0; background: #fff; color: #222; ${colorAdjust
 .pagina-pages-num::after { content: counter(pages); }
 ${PRINT_CSS}
 `;
-	const header = settings.displayHeader ? runningBand("header", settings.header, ctx) : "";
-	const footer = settings.displayFooter ? runningBand("footer", settings.footer, ctx) : "";
-	return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>${css}</style></head><body>${header}${footer}</body></html>`;
+}
+
+function appendPrintSlot(
+	parent: HTMLElement,
+	template: string,
+	ctx: VariableContext,
+	datetimeFormat?: string,
+): void {
+	const pageToken = "\u0001PAGINA_PAGE\u0001";
+	const pagesToken = "\u0001PAGINA_PAGES\u0001";
+	const marked = template
+		.replace(/\{\{\s*page\s*\}\}/gi, pageToken)
+		.replace(/\{\{\s*pages\s*\}\}/gi, pagesToken);
+	const rendered = renderTemplate(marked, { ...ctx, datetimeFormat });
+	const doc = parent.ownerDocument;
+	for (const piece of rendered.split(new RegExp(`(${pageToken}|${pagesToken})`))) {
+		if (!piece) continue;
+		if (piece === pageToken || piece === pagesToken) {
+			const span = doc.createElement("span");
+			span.className = piece === pageToken ? "pagina-page-num" : "pagina-pages-num";
+			parent.appendChild(span);
+			continue;
+		}
+		parent.appendChild(doc.createTextNode(piece));
+	}
+}
+
+function appendPrintBand(
+	doc: Document,
+	kind: "header" | "footer",
+	slots: PaginaSettings["header"],
+	ctx: VariableContext,
+): void {
+	if (!slots.left && !slots.center && !slots.right) return;
+	const band = doc.createElement("div");
+	band.className = `pagina-run-${kind}`;
+	band.style.color = slots.textColor || "#555555";
+	if (slots.borderStyle && slots.borderStyle !== "none") {
+		const border = `1px solid ${slots.borderColor || "#000000"}`;
+		if (kind === "header") band.style.borderBottom = border;
+		else band.style.borderTop = border;
+	}
+	for (const align of ["left", "center", "right"] as const) {
+		const cell = doc.createElement("div");
+		cell.className = align;
+		appendPrintSlot(cell, slots[align], ctx, slots.datetimeFormat);
+		band.appendChild(cell);
+	}
+	doc.body.appendChild(band);
+}
+
+function mountPrintFrame(
+	doc: Document,
+	title: string,
+	css: string,
+	settings: PaginaSettings,
+	ctx: VariableContext,
+): void {
+	const titleEl = doc.createElement("title");
+	titleEl.textContent = title;
+	doc.head.appendChild(titleEl);
+	const sheet = new CSSStyleSheet();
+	sheet.replaceSync(css);
+	doc.adoptedStyleSheets = [sheet];
+	if (settings.displayHeader) appendPrintBand(doc, "header", settings.header, ctx);
+	if (settings.displayFooter) appendPrintBand(doc, "footer", settings.footer, ctx);
 }
 
 function waitForPrintImages(doc: Document): Promise<void> {
@@ -613,17 +630,10 @@ function waitForPrintImages(doc: Document): Promise<void> {
 }
 
 function vaultFontFiles(app: App): VaultFontFiles {
-	const adapter = app.vault.adapter as { getBasePath?: () => string; basePath?: string };
-	const basePath = typeof adapter.getBasePath === "function" ? adapter.getBasePath() : (adapter.basePath ?? "");
-	return { basePath, configDir: app.vault.configDir };
-}
-
-function pluginFontDir(app: App): string {
-	const path = require("path") as typeof import("path");
-	const adapter = app.vault.adapter as { getBasePath?: () => string; basePath?: string };
-	const base = typeof adapter.getBasePath === "function" ? adapter.getBasePath() : (adapter.basePath ?? "");
-	if (!base) return "";
-	return path.join(base, app.vault.configDir, "plugins", "pagina");
+	return {
+		configDir: app.vault.configDir,
+		read: (normalizedPath) => app.vault.adapter.read(normalizedPath),
+	};
 }
 
 function copyBuffer(data: Uint8Array): ArrayBuffer {
@@ -670,9 +680,10 @@ function clampOutlinePages(items: OutlineItem[], maxPage: number): void {
 }
 
 function str(value: unknown): string {
-	if (value == null) return "";
-	if (Array.isArray(value)) return value.map(String).join(", ");
-	return String(value);
+	if (typeof value === "string") return value;
+	if (typeof value === "number" || typeof value === "boolean") return String(value);
+	if (Array.isArray(value)) return value.map((item) => str(item)).join(", ");
+	return "";
 }
 
 function drawHeaderFooter(
@@ -765,7 +776,7 @@ function bytesToBase64(data: Uint8Array): string {
 function isShareCancel(error: unknown): boolean {
 	if (error instanceof ExportCancelledError) return true;
 	if (error instanceof DOMException && error.name === "AbortError") return true;
-	const message = error instanceof Error ? error.message : String(error ?? "");
+	const message = error instanceof Error ? error.message : "";
 	const lower = message.toLowerCase();
 	return lower.includes("cancel") || lower.includes("dismiss") || lower.includes("abort");
 }
@@ -818,11 +829,10 @@ async function shareViaWebShare(fileName: string, data: Uint8Array, mime: string
 function downloadViaObjectUrl(fileName: string, data: Uint8Array, mime: string): boolean {
 	const blob = new Blob([copyBuffer(data)], { type: mime });
 	const url = URL.createObjectURL(blob);
-	const a = document.createElement("a");
-	a.href = url;
-	a.download = fileName;
-	a.rel = "noopener";
-	a.style.display = "none";
+	const a = createEl("a", {
+		cls: "pagina-hidden",
+		attr: { href: url, download: fileName, rel: "noopener" },
+	});
 	document.body.appendChild(a);
 	a.click();
 	window.setTimeout(() => {

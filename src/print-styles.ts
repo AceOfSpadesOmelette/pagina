@@ -1,3 +1,5 @@
+import "obsidian";
+
 /**
  * Light-paper tokens. Dark-mode Obsidian leaves `--interactive-*` and
  * `--background-*` dark while Pagina forces near-black text, which paints
@@ -47,7 +49,6 @@ ${LIGHT_PRINT_SURFACE_CSS}
   border-collapse: collapse;
   width: 100%;
   max-width: 100%;
-  break-inside: auto;
   page-break-inside: auto;
 }
 .print.pagina-print table th,
@@ -58,12 +59,11 @@ ${LIGHT_PRINT_SURFACE_CSS}
 }
 .print.pagina-print table.pagina-table-compact th,
 .print.pagina-print table.pagina-table-compact td {
-  padding: 2px 4px !important;
+  padding: 2px 4px;
 }
 .print.pagina-print .pagina-table-fit {
   max-width: 100%;
   overflow: hidden;
-  break-inside: avoid;
   page-break-inside: avoid;
 }
 .print.pagina-print thead {
@@ -73,9 +73,7 @@ ${LIGHT_PRINT_SURFACE_CSS}
   display: table-footer-group;
 }
 .print.pagina-print tr {
-  break-inside: avoid;
   page-break-inside: avoid;
-  break-after: auto;
 }
 .print.pagina-print img,
 .print.pagina-print .image-embed,
@@ -85,7 +83,6 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print .mermaid,
 .print.pagina-print .callout,
 .print.pagina-print figure {
-  break-inside: avoid;
   page-break-inside: avoid;
   max-width: 100%;
 }
@@ -98,9 +95,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print p[align="center"] img,
 .print.pagina-print .image-embed.is-centered img,
 .print.pagina-print .pagina-img-center {
-  display: block !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 .print.pagina-print .mermaid button,
 .print.pagina-print .mermaid .clickable-icon,
@@ -109,12 +106,11 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print .mermaid-lumina-overlay,
 .print.pagina-print .copy-code-button,
 .print.pagina-print .edit-block-button {
-  display: none !important;
+  display: none;
 }
 /* Body H1 only — never the file-name title or Conspectus TOC title. */
 /* Skip the first body H1 so the optional file-name title is not left alone on a page. */
 .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
-  break-before: page;
   page-break-before: always;
 }
 .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
@@ -124,10 +120,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
   text-decoration: underline;
 }
 .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
-  display: none !important;
+  display: none;
 }
 .print.pagina-print .pagina-forced-break {
-  break-before: page;
   page-break-before: always;
   display: block;
   height: 0;
@@ -137,16 +132,16 @@ ${LIGHT_PRINT_SURFACE_CSS}
   visibility: hidden;
 }
 img.__canvas__ {
-  width: 100% !important;
-  height: auto !important;
+  width: 100%;
+  height: auto;
 }
 @media print {
   .print.pagina-print {
-    visibility: visible !important;
-    position: static !important;
-    left: auto !important;
-    top: auto !important;
-    z-index: auto !important;
+    visibility: visible;
+    position: static;
+    left: auto;
+    top: auto;
+    z-index: auto;
     background: #ffffff;
     color: #222222;
 ${LIGHT_PRINT_SURFACE_CSS}
@@ -154,7 +149,7 @@ ${LIGHT_PRINT_SURFACE_CSS}
     print-color-adjust: exact;
   }
   .print .markdown-preview-view {
-    height: auto !important;
+    height: auto;
   }
   .print.pagina-print thead {
     display: table-header-group;
@@ -165,11 +160,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
   .print.pagina-print pre,
   .print.pagina-print .callout,
   .print.pagina-print .pagina-table-fit {
-    break-inside: avoid;
     page-break-inside: avoid;
   }
   .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
-    break-before: page;
     page-break-before: always;
   }
   .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
@@ -179,10 +172,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
     text-decoration: underline;
   }
   .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
-    display: none !important;
+    display: none;
   }
   .print.pagina-print .pagina-forced-break {
-    break-before: page;
     page-break-before: always;
     display: block;
     height: 0;
@@ -220,18 +212,27 @@ function printableWidth(root: HTMLElement): number {
 function tableMinContentWidth(table: HTMLTableElement): number {
 	const prevWidth = table.style.width;
 	const prevMaxWidth = table.style.maxWidth;
-	table.style.width = "min-content";
-	table.style.maxWidth = "none";
+	const full = table.classList.contains("pagina-table-full");
+	const natural = table.classList.contains("pagina-table-natural");
+	table.classList.remove("pagina-table-full", "pagina-table-natural");
+	table.style.removeProperty("width");
+	table.style.removeProperty("max-width");
+	table.classList.add("pagina-table-min-content");
 	void table.offsetWidth;
 	const needed = Math.max(table.scrollWidth, table.offsetWidth);
-	table.style.width = prevWidth;
-	table.style.maxWidth = prevMaxWidth;
+	table.classList.remove("pagina-table-min-content");
+	if (full) table.classList.add("pagina-table-full");
+	if (natural) table.classList.add("pagina-table-natural");
+	if (prevWidth) table.style.width = prevWidth;
+	if (prevMaxWidth) table.style.maxWidth = prevMaxWidth;
 	return needed;
 }
 
 function stretchTable(table: HTMLTableElement): void {
-	table.style.width = "100%";
-	table.style.maxWidth = "100%";
+	table.style.removeProperty("width");
+	table.style.removeProperty("max-width");
+	table.classList.remove("pagina-table-natural");
+	table.classList.add("pagina-table-full");
 }
 
 /**
@@ -241,7 +242,7 @@ function stretchTable(table: HTMLTableElement): void {
 export function fitWideTables(root: HTMLElement): void {
 	const hostWidth = printableWidth(root);
 	root.querySelectorAll("table").forEach((node) => {
-		const table = node as HTMLTableElement;
+		const table = node;
 		if (table.closest(".pagina-table-fit")) return;
 
 		stretchTable(table);
@@ -263,15 +264,14 @@ export function fitWideTables(root: HTMLElement): void {
 
 		const scale = Math.min(1, hostWidth / needed);
 
-		const wrap = document.createElement("div");
-		wrap.className = "pagina-table-fit";
-		wrap.style.overflow = "hidden";
+		const wrap = createDiv({ cls: "pagina-table-fit" });
 		wrap.style.width = `${needed}px`;
 		wrap.style.setProperty("zoom", String(scale));
 		table.parentNode?.insertBefore(wrap, table);
 		wrap.appendChild(table);
 		table.style.width = `${needed}px`;
-		table.style.maxWidth = "none";
+		table.classList.remove("pagina-table-full");
+		table.classList.add("pagina-table-natural");
 	});
 }
 
@@ -286,14 +286,8 @@ function insertBreakSpacerBefore(root: HTMLElement, el: HTMLElement, pageHeight:
 	const posInPage = ((offset % pageHeight) + pageHeight) % pageHeight;
 	if (posInPage < 1) return;
 	const pad = pageHeight - posInPage;
-	const spacer = document.createElement("div");
-	spacer.className = "pagina-h1-break";
-	spacer.setAttribute("aria-hidden", "true");
+	const spacer = createDiv({ cls: "pagina-h1-break pagina-break-spacer", attr: { "aria-hidden": "true" } });
 	spacer.style.height = `${pad}px`;
-	spacer.style.width = "100%";
-	spacer.style.margin = "0";
-	spacer.style.padding = "0";
-	spacer.style.border = "none";
 	el.parentNode?.insertBefore(spacer, el);
 	void root.offsetHeight;
 }
@@ -301,17 +295,15 @@ function insertBreakSpacerBefore(root: HTMLElement, el: HTMLElement, pageHeight:
 export function insertH1PageBreakSpacers(root: HTMLElement, pageHeightPx: number): void {
 	const pageHeight = Math.max(1, Math.ceil(pageHeightPx));
 	const headings = Array.from(
-		root.querySelectorAll("h1:not(.__title__):not(.conspectus-toc-title)"),
-	) as HTMLElement[];
+		root.querySelectorAll<HTMLElement>("h1:not(.__title__):not(.conspectus-toc-title)"),
+	);
 	for (const h1 of headings.slice(1)) {
 		insertBreakSpacerBefore(root, h1, pageHeight);
 	}
 }
 
 function makeForcedBreak(): HTMLElement {
-	const el = document.createElement("div");
-	el.className = "pagina-forced-break";
-	el.setAttribute("aria-hidden", "true");
+	const el = createDiv({ cls: "pagina-forced-break", attr: { "aria-hidden": "true" } });
 	return el;
 }
 
@@ -321,7 +313,7 @@ function makeForcedBreak(): HTMLElement {
  * Idempotent — safe to call on preview refresh.
  */
 export function prepareConspectusForPrint(root: HTMLElement): void {
-	const tocs = Array.from(root.querySelectorAll(".conspectus-toc")) as HTMLElement[];
+	const tocs = Array.from(root.querySelectorAll<HTMLElement>(".conspectus-toc"));
 	for (const toc of tocs) {
 		if (toc.classList.contains("conspectus-toc-hide-export")) {
 			// Drop any markers we previously attached around a now-hidden TOC.
@@ -357,7 +349,7 @@ export function prepareConspectusForPrint(root: HTMLElement): void {
 /** Raster fallback: pixel-pad before each `.pagina-forced-break` (CSS breaks ignored). */
 export function insertForcedBreakSpacers(root: HTMLElement, pageHeightPx: number): void {
 	const pageHeight = Math.max(1, Math.ceil(pageHeightPx));
-	const markers = Array.from(root.querySelectorAll(".pagina-forced-break")) as HTMLElement[];
+	const markers = Array.from(root.querySelectorAll<HTMLElement>(".pagina-forced-break"));
 	for (const marker of markers) {
 		insertBreakSpacerBefore(root, marker, pageHeight);
 	}

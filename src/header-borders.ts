@@ -87,7 +87,7 @@ interface Stroke {
 }
 
 export function normalizeBorderStyle(value: unknown): HeaderBorderStyle {
-	const raw = String(value ?? "none");
+	const raw = typeof value === "string" ? value : "none";
 	if (BORDER_BY_ID.has(raw as HeaderBorderStyle)) return raw as HeaderBorderStyle;
 	return LEGACY_STYLES[raw] ?? "none";
 }
@@ -251,7 +251,7 @@ function drawHatch(pdf: jsPDF, x: number, y: number, width: number, height: numb
 }
 
 function sanitizeColor(value: unknown): string {
-	const raw = String(value ?? "").trim();
+	const raw = typeof value === "string" ? value.trim() : "";
 	return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#000000";
 }
 

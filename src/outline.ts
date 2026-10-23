@@ -158,7 +158,7 @@ export function getHeadingTree(root: ParentNode): HeadingNode {
 		const el = heading as HTMLElement;
 		if (el.style.display === "none") return;
 		const level = Number.parseInt(el.tagName.slice(1), 10);
-		const link = el.querySelector("a.md-print-anchor") as HTMLAnchorElement | null;
+		const link = el.querySelector<HTMLAnchorElement>("a.md-print-anchor");
 		const fromHref = /^af:\/\/(.+)$/.exec(link?.getAttribute("href") ?? "");
 		const key = fromHref?.[1] ?? link?.dataset.flag ?? "";
 		if (!key) return;
