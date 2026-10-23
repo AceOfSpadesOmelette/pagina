@@ -34,6 +34,99 @@ export const LIGHT_PRINT_SURFACE_CSS = Object.entries(LIGHT_PRINT_SURFACE_VARS)
 	.join("\n");
 
 /**
+ * Three-column cheat sheet. Keep this block in sync with styles.css.
+ * These rules apply on screen (HTML preview) and in print (Chromium PDF).
+ */
+export const CHEAT_SHEET_CSS = `
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view {
+  column-count: 3;
+  column-gap: 4mm;
+  column-fill: auto;
+  font-size: var(--pagina-cheat-font-size, 8pt);
+  line-height: 1.05;
+  overflow-wrap: break-word;
+  break-after: avoid-page;
+  page-break-after: avoid;
+  /* Drop Obsidian's reading-view file margins. They pad every column, with or without the title. */
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > :first-child,
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__,
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + *,
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + * > :first-child {
+  margin-top: 0 !important;
+}
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
+  line-height: 1.05;
+}
+.print.pagina-print.pagina-cheat-sheet pre,
+.print.pagina-print.pagina-cheat-sheet code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.print.pagina-print.pagina-cheat-sheet pre,
+.print.pagina-print.pagina-cheat-sheet .pagina-table-fit {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+.print.pagina-print.pagina-cheat-sheet {
+  --table-text-size: 1em;
+}
+.print.pagina-print.pagina-cheat-sheet :is(table, th, td) {
+  font-size: 1em;
+  line-height: 1.05;
+}
+.print.pagina-print.pagina-cheat-sheet :is(th, td) {
+  padding: 1px 3px;
+}
+.print.pagina-print.pagina-cheat-compact .markdown-preview-view :is(p, li, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, .callout) {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.print.pagina-print.pagina-cheat-compact .markdown-preview-view :is(ul, ol) {
+  padding-left: 1.2em;
+}
+.print.pagina-print.pagina-cheat-compact .markdown-preview-view p:empty,
+.print.pagina-print.pagina-cheat-compact .markdown-preview-view p:has(> br:only-child) {
+  display: none;
+}
+.print.pagina-print.pagina-cheat-sheet.pagina-uniform-text .markdown-preview-view :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 1em;
+  font-weight: 700;
+}
+.print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h1 {
+  font-size: 1.35em;
+}
+.print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h2 {
+  font-size: 1.2em;
+}
+.print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h3 {
+  font-size: 1.1em;
+}
+.print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view :is(h4, h5, h6) {
+  font-size: 1em;
+  font-weight: 700;
+}
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view h1.__title__ {
+  font-family: inherit;
+  text-align: center;
+  margin: 0 0 1mm !important;
+  line-height: 1.05;
+  font-size: var(--pagina-cheat-font-size, 8pt);
+}
+.print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h1.__title__ {
+  font-size: calc(var(--pagina-cheat-font-size, 8pt) * 1.35);
+}
+.print.pagina-print.pagina-cheat-sheet .pagina-continuous-run {
+  margin: 0;
+}
+.print.pagina-print.pagina-cheat-sheet .pagina-run-heading {
+  font-weight: 700;
+}
+`;
+
+/**
  * Print rules for `.print.pagina-print`. Injected into the document and also
  * mirrored under @media print in styles.css for the native print-to-pdf pass.
  */
@@ -108,6 +201,20 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print .edit-block-button {
   display: none;
 }
+.print.pagina-print pre:has(> .pagina-code-lang) {
+  position: relative;
+  padding-top: 1.15em;
+}
+.print.pagina-print .pagina-code-lang {
+  position: absolute;
+  top: 0;
+  right: 0.4em;
+  font-size: 0.85em;
+  line-height: 1.15;
+  font-weight: 700;
+  color: #555555;
+  pointer-events: none;
+}
 /* Body H1 only — never the file-name title or Conspectus TOC title. */
 /* Skip the first body H1 so the optional file-name title is not left alone on a page. */
 .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
@@ -135,6 +242,7 @@ img.__canvas__ {
   width: 100%;
   height: auto;
 }
+${CHEAT_SHEET_CSS}
 @media print {
   .print.pagina-print {
     visibility: visible;

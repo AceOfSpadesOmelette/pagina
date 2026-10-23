@@ -12,12 +12,13 @@ import {
 	writePdfToPath,
 } from "./electron-pdf";
 import { mmToPx } from "./paginate";
-import { layoutWarning, resolvePageSizeMm } from "./page-presets";
+import { effectiveLandscape, layoutWarning, resolvePageSizeMm } from "./page-presets";
 import {
 	applyH1StyleClasses,
 	getDerivedLightVars,
 	injectLightVarsPatch,
 	removeLightVarsPatch,
+	renderFlagsFromSettings,
 	renderNoteForExport,
 	type RenderedNote,
 } from "./render";
@@ -39,6 +40,7 @@ export class PaginaExportModal extends Modal {
 	private inflight = new Map<string, Promise<Uint8Array>>();
 	private pdfTimer: number | null = null;
 	private pdfGen = 0;
+	private structureGen = 0;
 	private resizeObserver: ResizeObserver | null = null;
 
 	private settingsPane!: HTMLElement;
@@ -186,7 +188,34 @@ export class PaginaExportModal extends Modal {
 	}
 
 	private onDraftChange(): void {
+		void this.applyDraftChange();
+	}
+
+	private needsFreshRender(): boolean {
+		const root = this.rendered?.contentEl;
+		if (!root) return false;
+		const wasContinuous = root.dataset.paginaContinuous === "1";
+		const wantContinuous = this.draft.cheatSheet && this.draft.cheatSheetDensity === "continuous";
+		return wasContinuous !== wantContinuous;
+	}
+
+	private invalidateRender(): void {
+		this.structureGen++;
+		if (this.pdfTimer != null) {
+			window.clearTimeout(this.pdfTimer);
+			this.pdfTimer = null;
+		}
+		this.rendered?.cleanup();
+		this.rendered = null;
+		this.previewClone = null;
+		this.pdfCache.clear();
+		this.htmlWrap?.empty();
+	}
+
+	private async applyDraftChange(): Promise<void> {
 		const message = this.refreshLayoutWarning();
+		const refreshStructure = this.needsFreshRender();
+		if (refreshStructure) this.invalidateRender();
 		this.toggleTitle(this.draft.includeFileNameAsTitle);
 		this.applyH1Styles();
 		this.applyScale();
@@ -195,9 +224,24 @@ export class PaginaExportModal extends Modal {
 				window.clearTimeout(this.pdfTimer);
 				this.pdfTimer = null;
 			}
+			if (refreshStructure && !isPhoneSession()) {
+				try {
+					await this.renderDocument();
+				} catch (err) {
+					console.error(err);
+				}
+			}
 			return;
 		}
 		if (isPhoneSession()) return;
+		if (refreshStructure) {
+			try {
+				await this.renderDocument();
+			} catch (err) {
+				console.error(err);
+				return;
+			}
+		}
 		if (this.mode !== "pdf") return;
 		if (!this.draft.enablePreview) {
 			this.showPreviewDisabled();
@@ -231,7 +275,7 @@ export class PaginaExportModal extends Modal {
 			this.draft.pageSize,
 			this.draft.customPageWidthMm,
 			this.draft.customPageHeightMm,
-			this.draft.landscape,
+			effectiveLandscape(this.draft),
 		);
 		const width = this.previewEl.offsetWidth;
 		const scale = width > 0 ? Math.floor((mmToPx(page.width) / width) * 100) / 100 : 1;
@@ -273,27 +317,47 @@ export class PaginaExportModal extends Modal {
 
 	private async renderDocument(): Promise<void> {
 		if (this.rendered) return;
+		const gen = this.structureGen;
 		if (this.renderPromise) {
 			await this.renderPromise;
-			return;
+			if (this.rendered || gen !== this.structureGen) return;
 		}
-		this.renderPromise = (async () => {
-			this.rendered = await renderNoteForExport({
+		const promise = (async () => {
+			let rendered = await renderNoteForExport({
 				app: this.app,
 				file: this.file,
-				includeTitle: this.draft.includeFileNameAsTitle,
-				pageBreakBeforeH1: this.draft.pageBreakBeforeH1,
-				centerH1: this.draft.centerH1,
-				underlineH1: this.draft.underlineH1,
+				...renderFlagsFromSettings(this.draft),
 			});
-			prepareConspectusForPrint(this.rendered.contentEl);
+			if (gen !== this.structureGen) {
+				rendered.cleanup();
+				return;
+			}
+			const wantContinuous = this.draft.cheatSheet && this.draft.cheatSheetDensity === "continuous";
+			const wasContinuous = rendered.contentEl.dataset.paginaContinuous === "1";
+			if (wantContinuous !== wasContinuous) {
+				rendered.cleanup();
+				if (gen !== this.structureGen) return;
+				rendered = await renderNoteForExport({
+					app: this.app,
+					file: this.file,
+					...renderFlagsFromSettings(this.draft),
+				});
+				if (gen !== this.structureGen) {
+					rendered.cleanup();
+					return;
+				}
+			}
+			applyH1StyleClasses(rendered.printEl, this.draft);
+			prepareConspectusForPrint(rendered.contentEl);
+			this.rendered = rendered;
 			this.mountHtmlPreview();
 			this.applyScale();
 		})();
+		this.renderPromise = promise;
 		try {
-			await this.renderPromise;
+			await promise;
 		} finally {
-			this.renderPromise = null;
+			if (this.renderPromise === promise) this.renderPromise = null;
 		}
 	}
 

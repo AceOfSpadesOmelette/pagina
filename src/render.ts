@@ -1,4 +1,6 @@
 import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, requestUrl, TFile } from "obsidian";
+import type { PaginaSettings } from "./types";
+import { applyCheatSheetClasses, applyContinuousText } from "./cheat-sheet";
 import { sanitizeCssText } from "./css-sanitize";
 import { stampImageRequests } from "./image-fit";
 import {
@@ -138,6 +140,52 @@ export async function fixWaitRender(markdown: string, viewEl: HTMLElement): Prom
 		}
 	}
 	await sleep(400);
+}
+
+const SKIP_CODE_LANG = new Set(["mermaid"]);
+
+function languageFromClassName(className: string): string | null {
+	for (const cls of className.split(/\s+/)) {
+		const lang = cls.startsWith("block-language-")
+			? cls.slice("block-language-".length)
+			: cls.startsWith("language-")
+				? cls.slice("language-".length)
+				: "";
+		if (!lang || SKIP_CODE_LANG.has(lang.toLowerCase())) continue;
+		return lang;
+	}
+	return null;
+}
+
+/**
+ * Obsidian keeps a fence language such as ```python on the code element and
+ * does not print it. Show that name at the top-right of the block.
+ */
+export function labelCodeBlockLanguages(root: HTMLElement): void {
+	root.querySelectorAll("pre").forEach((pre) => {
+		if (!(pre instanceof HTMLElement) || pre.dataset.paginaCodeLang === "1") return;
+		if (pre.classList.contains("mermaid") || pre.querySelector(".mermaid, svg")) return;
+		const code = [...pre.children].find((child) => child.tagName === "CODE");
+		const codeEl = code instanceof HTMLElement ? code : null;
+		const lang =
+			(codeEl && languageFromClassName(codeEl.className)) ||
+			languageFromClassName(pre.className) ||
+			languageFromClassName(pre.parentElement?.className ?? "");
+		if (!lang) return;
+		const label = document.createElement("span");
+		label.className = "pagina-code-lang";
+		label.textContent = lang;
+		pre.insertBefore(label, pre.firstChild);
+		pre.dataset.paginaCodeLang = "1";
+	});
+}
+
+/** The note font lives on the preview. Copy it onto the title so a heading face does not replace it. */
+function applyCheatSheetTitleFont(viewEl: HTMLElement): void {
+	const titleEl = viewEl.querySelector(":scope > h1.__title__");
+	if (!(titleEl instanceof HTMLElement)) return;
+	const face = getComputedStyle(viewEl).fontFamily?.trim();
+	if (face) titleEl.style.fontFamily = face;
 }
 
 function parkPrintHost(printEl: HTMLElement, widthPx: number): void {
@@ -720,6 +768,10 @@ export interface RenderNoteOptions {
 	centerH1?: boolean;
 	/** Underline body H1s (excluded: file-name title). */
 	underlineH1?: boolean;
+	cheatSheet?: boolean;
+	cheatSheetDensity?: PaginaSettings["cheatSheetDensity"];
+	cheatSheetFontSizePt?: number;
+	cheatSheetUniformText?: boolean;
 	/** html2canvas fallback: inline images and attach a sanitized stylesheet. */
 	forRaster?: boolean;
 	/** WebView print: same inlined assets, but keep Mermaid as SVG. */
@@ -729,14 +781,48 @@ export interface RenderNoteOptions {
 	contentWidthPx?: number;
 }
 
-/** Apply body-H1 print style classes on the export host (never affects h1.__title__). */
+/** Fields renderNoteForExport reads off a settings object. */
+export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
+	RenderNoteOptions,
+	| "includeTitle"
+	| "pageBreakBeforeH1"
+	| "centerH1"
+	| "underlineH1"
+	| "cheatSheet"
+	| "cheatSheetDensity"
+	| "cheatSheetFontSizePt"
+	| "cheatSheetUniformText"
+> {
+	return {
+		includeTitle: settings.includeFileNameAsTitle,
+		pageBreakBeforeH1: settings.pageBreakBeforeH1,
+		centerH1: settings.centerH1,
+		underlineH1: settings.underlineH1,
+		cheatSheet: settings.cheatSheet,
+		cheatSheetDensity: settings.cheatSheetDensity,
+		cheatSheetFontSizePt: settings.cheatSheetFontSizePt,
+		cheatSheetUniformText: settings.cheatSheetUniformText,
+	};
+}
+
+/** Apply body-H1 and cheat-sheet classes. Page breaks are ignored while the cheat sheet is on. */
 export function applyH1StyleClasses(
 	printEl: HTMLElement,
-	opts: { pageBreakBeforeH1?: boolean; centerH1?: boolean; underlineH1?: boolean },
+	opts: Pick<
+		RenderNoteOptions,
+		| "pageBreakBeforeH1"
+		| "centerH1"
+		| "underlineH1"
+		| "cheatSheet"
+		| "cheatSheetDensity"
+		| "cheatSheetFontSizePt"
+		| "cheatSheetUniformText"
+	>,
 ): void {
-	printEl.toggleClass("pagina-break-h1", Boolean(opts.pageBreakBeforeH1));
+	printEl.toggleClass("pagina-break-h1", Boolean(opts.pageBreakBeforeH1) && !opts.cheatSheet);
 	printEl.toggleClass("pagina-center-h1", Boolean(opts.centerH1));
 	printEl.toggleClass("pagina-underline-h1", Boolean(opts.underlineH1));
+	applyCheatSheetClasses(printEl, opts);
 }
 
 export interface RenderedNote {
@@ -804,7 +890,12 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	const dest = addHeadingAnchors(viewEl);
 	fixInternalAnchors(viewEl, dest, file.basename);
 	wireConspectusTocLinks(viewEl);
+	labelCodeBlockLanguages(viewEl);
 	applyLightVars(printEl);
+	if (opts.cheatSheet && opts.cheatSheetDensity === "continuous") {
+		applyContinuousText(viewEl);
+	}
+	if (opts.cheatSheet) applyCheatSheetTitleFont(viewEl);
 
 	return {
 		printEl,

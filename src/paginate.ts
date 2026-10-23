@@ -1,6 +1,6 @@
 import { bandHeightMm } from "./header-footer-layout";
 import type { PaginaSettings } from "./types";
-import { resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { effectiveLandscape, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 
 /** CSS reference pixel density used by html2canvas layout. */
 export const CSS_DPI = 96;
@@ -37,7 +37,7 @@ export function computePageLayout(settings: PaginaSettings): PageLayout {
 		settings.pageSize,
 		settings.customPageWidthMm,
 		settings.customPageHeightMm,
-		settings.landscape,
+		effectiveLandscape(settings),
 	);
 	const margins = resolvePrintMarginsMm(settings);
 

@@ -119,3 +119,7 @@ if (typeof htmlProto.addClass !== "function") {
 		for (const [key, value] of Object.entries(props)) this.style.setProperty(key, value);
 	};
 }
+
+export function loadPdfJs(): Promise<unknown> {
+	return Promise.resolve({});
+}

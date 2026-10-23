@@ -34,6 +34,13 @@ export const DATETIME_FORMATS: { id: DatetimeFormat; label: string }[] = [
 
 export type MaxHeadingLevel = "1" | "2" | "3" | "4" | "5" | "6";
 
+/** Compact keeps each line. Continuous joins text into one run. */
+export type CheatSheetDensity = "compact" | "continuous";
+
+export const CHEAT_SHEET_FONT_MIN_PT = 6;
+export const CHEAT_SHEET_FONT_MAX_PT = 14;
+export const CHEAT_SHEET_FONT_DEFAULT_PT = 8;
+
 export type TimestampFormat = "none" | "EPOCH" | "YYYYMMDD" | "YYYY-MM-DD" | "YYYYMMDD-HHMMSS";
 
 export interface PaginaSettings {
@@ -54,6 +61,13 @@ export interface PaginaSettings {
 	customMarginRightMm: number;
 	downscalePercent: number;
 	landscape: boolean;
+	/** Landscape, three columns. Does not change the saved orientation. */
+	cheatSheet: boolean;
+	cheatSheetDensity: CheatSheetDensity;
+	/** Body text size in points while the cheat sheet is on. */
+	cheatSheetFontSizePt: number;
+	/** Headings use the body size. They stay bold. */
+	cheatSheetUniformText: boolean;
 	displayHeader: boolean;
 	header: HeaderFooterSlots;
 	displayFooter: boolean;
@@ -83,6 +97,10 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 	customMarginRightMm: 23,
 	downscalePercent: 100,
 	landscape: false,
+	cheatSheet: false,
+	cheatSheetDensity: "compact",
+	cheatSheetFontSizePt: CHEAT_SHEET_FONT_DEFAULT_PT,
+	cheatSheetUniformText: true,
 	displayHeader: false,
 	header: {
 		left: "",
@@ -140,6 +158,10 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		pdfMetadata: data.pdfMetadata ?? DEFAULT_SETTINGS.pdfMetadata,
 		enablePreview: data.enablePreview ?? DEFAULT_SETTINGS.enablePreview,
 		landscape: data.landscape === true,
+		cheatSheet: data.cheatSheet === true,
+		cheatSheetDensity: data.cheatSheetDensity === "continuous" ? "continuous" : "compact",
+		cheatSheetFontSizePt: clampCheatSheetFontSize(data.cheatSheetFontSizePt),
+		cheatSheetUniformText: data.cheatSheetUniformText ?? DEFAULT_SETTINGS.cheatSheetUniformText,
 		timestampFormat: (["none", "EPOCH", "YYYYMMDD", "YYYY-MM-DD", "YYYYMMDD-HHMMSS"].includes(
 			String(data.timestampFormat),
 		)
@@ -162,4 +184,9 @@ function normalizeDatetimeFormat(value: unknown): DatetimeFormat {
 
 function clamp(n: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, n));
+}
+
+export function clampCheatSheetFontSize(value: unknown): number {
+	const n = typeof value === "number" && Number.isFinite(value) ? value : CHEAT_SHEET_FONT_DEFAULT_PT;
+	return clamp(n, CHEAT_SHEET_FONT_MIN_PT, CHEAT_SHEET_FONT_MAX_PT);
 }

@@ -12,7 +12,7 @@ import {
 	LINE_MM,
 	TEXT_BORDER_GAP_MM,
 } from "./header-footer-layout";
-import { layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { fitStampedImages } from "./image-fit";
 import { computePageLayout, type PageLayout } from "./paginate";
 import {
@@ -21,7 +21,9 @@ import {
 	insertH1PageBreakSpacers,
 	prepareConspectusForPrint,
 } from "./print-styles";
-import { applyH1StyleClasses, collectStyles, renderNoteForExport, type RenderedNote } from "./render";
+import { applyContinuousText } from "./cheat-sheet";
+import { dropTrailingBlankPage } from "./blank-page";
+import { applyH1StyleClasses, collectStyles, renderFlagsFromSettings, renderNoteForExport, type RenderedNote } from "./render";
 import { renderTemplate, formatTimestamp, type VariableContext } from "./variables";
 import { prepareCloneForCapture, sanitizeCssText } from "./css-sanitize";
 import {
@@ -121,12 +123,12 @@ async function buildPdfBytesElectron(
 		(await renderNoteForExport({
 			app,
 			file,
-			includeTitle: settings.includeFileNameAsTitle,
-			pageBreakBeforeH1: settings.pageBreakBeforeH1,
-			centerH1: settings.centerH1,
-			underlineH1: settings.underlineH1,
+			...renderFlagsFromSettings(settings),
 		}));
 	applyH1StyleClasses(rendered.printEl, settings);
+	if (settings.cheatSheet && settings.cheatSheetDensity === "continuous") {
+		applyContinuousText(rendered.contentEl);
+	}
 	prepareConspectusForPrint(rendered.contentEl);
 	const shouldCleanup = !existingRender;
 	try {
@@ -167,10 +169,25 @@ async function buildPdfBytesElectron(
 			tagged: settings.generateTaggedPDF,
 			metadata: metadataFrom(settings, file, frontmatter),
 		});
-		const stamped = await stampHeaderFooter(copyBytes(processed), settings, ctx, {
-			header: headerFace,
-			footer: footerFace,
-		});
+		let printable = copyBytes(processed);
+		let redrawEdges = false;
+		if (settings.cheatSheet) {
+			const dropped = await dropTrailingBlankPage(printable, settings);
+			printable = dropped.bytes;
+			redrawEdges =
+				dropped.removed &&
+				((settings.displayHeader && !headerFace) || (settings.displayFooter && !footerFace));
+		}
+		const stamped = await stampHeaderFooter(
+			printable,
+			settings,
+			ctx,
+			{
+				header: headerFace,
+				footer: footerFace,
+			},
+			redrawEdges ? { cover: true, standardFallback: true } : undefined,
+		);
 		return { bytes: copyBytes(stamped), totalPages: 0 };
 	} finally {
 		if (shouldCleanup) rendered.cleanup();
@@ -189,10 +206,7 @@ export async function buildPdfBytesRaster(
 	const rendered = await renderNoteForExport({
 		app,
 		file,
-		includeTitle: settings.includeFileNameAsTitle,
-		pageBreakBeforeH1: settings.pageBreakBeforeH1,
-		centerH1: settings.centerH1,
-		underlineH1: settings.underlineH1,
+		...renderFlagsFromSettings(settings),
 		forRaster: true,
 		bakeMermaid: false,
 		contentWidthPx: layout.contentWidthPx,
@@ -205,7 +219,7 @@ export async function buildPdfBytesRaster(
 		void contentEl.offsetHeight;
 
 		prepareConspectusForPrint(contentEl);
-		if (settings.pageBreakBeforeH1) {
+		if (settings.pageBreakBeforeH1 && !settings.cheatSheet) {
 			insertH1PageBreakSpacers(contentEl, layout.contentHeightPx);
 		}
 		insertForcedBreakSpacers(contentEl, layout.contentHeightPx);
@@ -422,10 +436,7 @@ export async function exportNoteViaWebPrint(
 	const rendered = await renderNoteForExport({
 		app,
 		file,
-		includeTitle: settings.includeFileNameAsTitle,
-		pageBreakBeforeH1: settings.pageBreakBeforeH1,
-		centerH1: settings.centerH1,
-		underlineH1: settings.underlineH1,
+		...renderFlagsFromSettings(settings),
 		forPrint: true,
 	});
 	applyH1StyleClasses(rendered.printEl, settings);
@@ -454,7 +465,7 @@ export async function exportNoteViaWebPrint(
 			settings.pageSize,
 			settings.customPageWidthMm,
 			settings.customPageHeightMm,
-			settings.landscape,
+			effectiveLandscape(settings),
 		);
 		const margins = resolvePrintMarginsMm(settings);
 		const frontmatter = rendered.frontmatter ?? app.metadataCache.getFileCache(file)?.frontmatter ?? {};

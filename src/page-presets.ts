@@ -109,11 +109,17 @@ export function validateLayout(
 	return null;
 }
 
+/** Cheat sheet forces landscape without changing the saved orientation. */
+export function effectiveLandscape(input: { landscape?: boolean; cheatSheet?: boolean }): boolean {
+	return input.cheatSheet === true || input.landscape === true;
+}
+
 export interface LayoutInput {
 	pageSize: string;
 	customPageWidthMm: number;
 	customPageHeightMm: number;
 	landscape: boolean;
+	cheatSheet?: boolean;
 	marginPreset: string;
 	customMarginTopMm: number;
 	customMarginBottomMm: number;
@@ -160,7 +166,7 @@ export function layoutWarning(input: LayoutInput): string | null {
 		input.pageSize,
 		input.customPageWidthMm,
 		input.customPageHeightMm,
-		input.landscape,
+		effectiveLandscape(input),
 	);
 	return validateLayout(page, resolvePrintMarginsMm(input), input.pageSize);
 }

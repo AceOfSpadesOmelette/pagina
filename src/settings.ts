@@ -11,6 +11,7 @@ import { layoutWarning, MARGIN_OPTIONS, PAGE_SIZE_OPTIONS } from "./page-presets
 import { isPhoneSession } from "./session";
 import { applyImportedSettings, downloadSettingsJson, parseSettingsJson } from "./settings-io";
 import {
+	clampCheatSheetFontSize,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
 	type HeaderFooterSlots,
@@ -88,8 +89,24 @@ export class PaginaSettingTab extends PluginSettingTab {
 		}
 		if (key === "maxHeadingLevel" && !isHeadingLevel(value)) return;
 		if (key === "timestampFormat" && !isTimestampFormat(value)) return;
+		if (key === "cheatSheetDensity") {
+			settings.cheatSheetDensity = value === "continuous" ? "continuous" : "compact";
+			await this.plugin.saveSettings();
+			return;
+		}
+		if (key === "cheatSheetFontSizePt") {
+			settings.cheatSheetFontSizePt = clampCheatSheetFontSize(value);
+			await this.plugin.saveSettings();
+			return;
+		}
 		await super.setControlValue(key, value);
-		if (key === "pageSize" || key === "marginPreset" || key === "displayHeader" || key === "displayFooter") {
+		if (
+			key === "pageSize" ||
+			key === "marginPreset" ||
+			key === "displayHeader" ||
+			key === "displayFooter" ||
+			key === "cheatSheet"
+		) {
 			this.update();
 		}
 	}
@@ -105,6 +122,39 @@ export class PaginaSettingTab extends PluginSettingTab {
 				name: "Layout",
 				desc: layoutWarning(settings) ?? "",
 				visible: () => Boolean(layoutWarning(this.plugin.settings)),
+			},
+			{
+				type: "group",
+				heading: "Exam cheat sheet",
+				items: [
+					{
+						name: "Exam cheat sheet",
+						desc: "Landscape, three columns per page. Page size, margins, headers, and footers stay as set. Turning this off restores your orientation.",
+						control: { type: "toggle", key: "cheatSheet" },
+					},
+					{
+						name: "Density",
+						desc: "Compact keeps each line and tightens the spacing. Continuous joins paragraphs, lists, and headings into one run. Code, tables, images, math, and diagrams stay as blocks.",
+						visible: () => this.plugin.settings.cheatSheet,
+						control: {
+							type: "dropdown",
+							key: "cheatSheetDensity",
+							options: { compact: "Compact", continuous: "Continuous" },
+						},
+					},
+					{
+						name: "Text size",
+						desc: "Points, from 6 to 14. Downscale percent still scales the whole page, including this text.",
+						visible: () => this.plugin.settings.cheatSheet,
+						control: { type: "slider", key: "cheatSheetFontSizePt", min: 6, max: 14, step: 1 },
+					},
+					{
+						name: "Uniform text size",
+						desc: "Use one size for headings and body text. Headings stay bold. Continuous density always uses one size.",
+						visible: () => this.plugin.settings.cheatSheet,
+						control: { type: "toggle", key: "cheatSheetUniformText" },
+					},
+				],
 			},
 			{
 				type: "group",
@@ -180,11 +230,17 @@ export class PaginaSettingTab extends PluginSettingTab {
 					{
 						name: "Orientation",
 						desc: "Portrait is the default.",
+						visible: () => !this.plugin.settings.cheatSheet,
 						control: {
 							type: "dropdown",
 							key: "orientation",
 							options: { portrait: "Portrait", landscape: "Landscape" },
 						},
+					},
+					{
+						name: "Orientation",
+						desc: "Exam cheat sheet uses landscape. Your orientation setting is kept for when the cheat sheet is off.",
+						visible: () => this.plugin.settings.cheatSheet,
 					},
 				],
 			},

@@ -13,6 +13,7 @@ The export window previews the note as the page or as PDF pages. The page is lig
 Open **Settings → Pagina**, or change the same options in the export window.
 
 - Page size, portrait or landscape, margins, and downscale. Portrait is the default.
+- Exam cheat sheet: landscape and three columns per page. Compact keeps each line and tightens the spacing. Continuous joins the note into one run, except code, tables, images, math, and diagrams. Text size is in points, and headings can use that same size. Page size, margins, headers, and footers stay as you set them. Downscale still scales the whole page.
 - The file name as a title at the top of the export
 - Whether Heading 1 starts a new page, and whether it is centered or underlined
 - A header and a footer, each with left, center, and right text

@@ -1,6 +1,6 @@
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { footerBaselineFromBottomMm, headerBaselineFromTopMm } from "./header-footer-layout";
+import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, LINE_MM, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
 import { resolvePrintMarginsMm } from "./page-presets";
 import type { HeaderFooterSlots, PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
@@ -8,13 +8,23 @@ import { renderTemplate, type VariableContext } from "./variables";
 /** 9px at 96dpi, matching the header and footer line. */
 const FONT_PT = 6.75;
 
+export interface StampOptions {
+	/** Paint out Chromium's header or footer text before drawing a replacement. */
+	cover?: boolean;
+	/** Use Helvetica when that edge has no embedded font. */
+	standardFallback?: boolean;
+}
+
 export async function stampHeaderFooter(
 	bytes: Uint8Array,
 	settings: PaginaSettings,
 	ctx: VariableContext,
 	fonts: { header: Uint8Array | null; footer: Uint8Array | null },
+	options?: StampOptions,
 ): Promise<Uint8Array> {
-	if (!fonts.header && !fonts.footer) return bytes;
+	const fallback = options?.standardFallback === true;
+	const needsDraw = Boolean(fonts.header || fonts.footer || (fallback && (settings.displayHeader || settings.displayFooter)));
+	if (!needsDraw) return bytes;
 	const doc = await PDFDocument.load(bytes);
 	doc.registerFontkit(fontkit);
 	const embedded = new Map<Uint8Array, PDFFont>();
@@ -26,8 +36,21 @@ export async function stampHeaderFooter(
 		}
 		return font;
 	};
-	const headerFont = fonts.header ? await fontFor(fonts.header) : null;
-	const footerFont = fonts.footer ? await fontFor(fonts.footer) : null;
+	let standard: PDFFont | null = null;
+	const standardFont = async (): Promise<PDFFont> => {
+		if (!standard) standard = await doc.embedFont(StandardFonts.Helvetica);
+		return standard;
+	};
+	const headerFont = fonts.header
+		? await fontFor(fonts.header)
+		: fallback && settings.displayHeader
+			? await standardFont()
+			: null;
+	const footerFont = fonts.footer
+		? await fontFor(fonts.footer)
+		: fallback && settings.displayFooter
+			? await standardFont()
+			: null;
 	const margins = resolvePrintMarginsMm(settings);
 	const pages = doc.getPages();
 	const total = pages.length;
@@ -37,6 +60,7 @@ export async function stampHeaderFooter(
 		const pageCtx: VariableContext = { ...ctx, page: index + 1, pages: total };
 		const { height } = page.getSize();
 		if (settings.displayHeader && headerFont) {
+			if (options?.cover && !fonts.header) coverEdge(page, "header");
 			drawEdge(
 				page,
 				headerFont,
@@ -47,10 +71,22 @@ export async function stampHeaderFooter(
 			);
 		}
 		if (settings.displayFooter && footerFont) {
+			if (options?.cover && !fonts.footer) coverEdge(page, "footer");
 			drawEdge(page, footerFont, settings.footer, pageCtx, margins, mm(footerBaselineFromBottomMm()));
 		}
 	}
 	return doc.save();
+}
+
+/** Cover the running text, and stop short of the border rule. */
+function coverEdge(page: PDFPage, edge: "header" | "footer"): void {
+	const { width, height } = page.getSize();
+	const band = mm(FRAME_INSET_MM + LINE_MM + TEXT_BORDER_GAP_MM * 0.5);
+	if (edge === "header") {
+		page.drawRectangle({ x: 0, y: height - band, width, height: band, color: rgb(1, 1, 1) });
+		return;
+	}
+	page.drawRectangle({ x: 0, y: 0, width, height: band, color: rgb(1, 1, 1) });
 }
 
 function drawEdge(

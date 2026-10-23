@@ -5,7 +5,7 @@ import electron from "electron";
 import { borderSvg } from "./header-borders";
 import { EM_MM, LINE_MM, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
 import type { PaginaSettings, TimestampFormat } from "./types";
-import { layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { formatTimestamp, renderTemplate, type VariableContext } from "./variables";
 
 interface IpcRendererLike {
@@ -246,7 +246,7 @@ export function makeElectronPrintOptions(
 	const scale = Math.min(2, Math.max(0.01, settings.downscalePercent / 100));
 
 	return {
-		landscape: settings.landscape,
+		landscape: effectiveLandscape(settings),
 		printBackground: settings.printBackground,
 		generateTaggedPDF: settings.generateTaggedPDF,
 		pageSize: {

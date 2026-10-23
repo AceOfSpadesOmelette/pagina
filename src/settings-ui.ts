@@ -36,6 +36,61 @@ export function renderPaginaSettings(
 	};
 	refreshWarning();
 
+	new Setting(container).setName("Exam cheat sheet").setHeading();
+
+	new Setting(container)
+		.setName("Exam cheat sheet")
+		.setDesc(
+			"Landscape, three columns per page. Page size, margins, headers, and footers stay as set. Turning this off restores your orientation.",
+		)
+		.addToggle((t) =>
+			t.setValue(settings.cheatSheet).onChange((v) => {
+				settings.cheatSheet = v;
+				notify();
+				opts.onRebuild();
+			}),
+		);
+
+	if (settings.cheatSheet) {
+		new Setting(container)
+			.setName("Density")
+			.setDesc(
+				"Compact keeps each line and tightens the spacing. Continuous joins paragraphs, lists, and headings into one run. Code, tables, images, math, and diagrams stay as blocks.",
+			)
+			.addDropdown((dd) => {
+				dd.addOption("compact", "Compact");
+				dd.addOption("continuous", "Continuous");
+				dd.setValue(settings.cheatSheetDensity).onChange((v) => {
+					settings.cheatSheetDensity = v === "continuous" ? "continuous" : "compact";
+					notify();
+				});
+			});
+
+		new Setting(container)
+			.setName("Text size")
+			.setDesc("Points, from 6 to 14. Downscale percent still scales the whole page, including this text.")
+			.addSlider((s) =>
+				s
+					.setLimits(6, 14, 1)
+					.setValue(settings.cheatSheetFontSizePt)
+					.setDynamicTooltip()
+					.onChange((v) => {
+						settings.cheatSheetFontSizePt = v;
+						notify();
+					}),
+			);
+
+		new Setting(container)
+			.setName("Uniform text size")
+			.setDesc("Use one size for headings and body text. Headings stay bold. Continuous density always uses one size.")
+			.addToggle((t) =>
+				t.setValue(settings.cheatSheetUniformText).onChange((v) => {
+					settings.cheatSheetUniformText = v;
+					notify();
+				}),
+			);
+	}
+
 	new Setting(container).setName("Document").setHeading();
 
 	new Setting(container)
@@ -180,17 +235,23 @@ export function renderPaginaSettings(
 				}),
 		);
 
-	new Setting(container)
-		.setName("Orientation")
-		.setDesc("Portrait is the default.")
-		.addDropdown((dd) => {
-			dd.addOption("portrait", "Portrait");
-			dd.addOption("landscape", "Landscape");
-			dd.setValue(settings.landscape ? "landscape" : "portrait").onChange((v) => {
-				settings.landscape = v === "landscape";
-				notify();
+	if (!settings.cheatSheet) {
+		new Setting(container)
+			.setName("Orientation")
+			.setDesc("Portrait is the default.")
+			.addDropdown((dd) => {
+				dd.addOption("portrait", "Portrait");
+				dd.addOption("landscape", "Landscape");
+				dd.setValue(settings.landscape ? "landscape" : "portrait").onChange((v) => {
+					settings.landscape = v === "landscape";
+					notify();
+				});
 			});
-		});
+	} else {
+		new Setting(container)
+			.setName("Orientation")
+			.setDesc("Exam cheat sheet uses landscape. Your orientation setting is kept for when the cheat sheet is off.");
+	}
 
 	new Setting(container).setName("PDF").setHeading();
 
