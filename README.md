@@ -36,3 +36,11 @@ Under **Backup**, **Export settings** and **Import settings** save or restore th
 | `{{property:key}}` | A property from the note’s properties |
 
 Date formats include `EPOCH`, `YYYYMMDD`, `YYYY-MM-DD`, `YYYYMMDD-HHMMSS`, `YYYY-MM-DD HH:MM`, and `YYYY-MM-DD HH:MM:SS`.
+
+## Support
+
+[![Buy Me a Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/aceofspadesomelette)
+
+## Star history
+
+[![Star History Chart](https://api.star-history.com/svg?repos=AceOfSpadesOmelette/pagina&type=Date)](https://www.star-history.com/#AceOfSpadesOmelette/pagina&Date)
