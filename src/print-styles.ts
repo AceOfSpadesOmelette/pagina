@@ -39,7 +39,7 @@ export const LIGHT_PRINT_SURFACE_CSS = Object.entries(LIGHT_PRINT_SURFACE_VARS)
  */
 export const CHEAT_SHEET_CSS = `
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view {
-  column-count: 3;
+  column-count: var(--pagina-cheat-columns, 3);
   column-gap: 4mm;
   column-fill: auto;
   font-size: var(--pagina-cheat-font-size, 8pt);
@@ -64,6 +64,13 @@ export const CHEAT_SHEET_CSS = `
 .print.pagina-print.pagina-cheat-sheet code {
   white-space: pre-wrap;
   word-break: break-word;
+}
+.print.pagina-print.pagina-cheat-sheet pre {
+  margin-top: 0.6mm;
+  margin-bottom: 0.6mm;
+}
+.print.pagina-print.pagina-cheat-sheet hr {
+  margin: 0.6mm 0 !important;
 }
 .print.pagina-print.pagina-cheat-sheet pre,
 .print.pagina-print.pagina-cheat-sheet .pagina-table-fit {
@@ -214,6 +221,10 @@ ${LIGHT_PRINT_SURFACE_CSS}
   font-weight: 700;
   color: #555555;
   pointer-events: none;
+}
+/* Obsidian's reading view uses margin: 2rem on hr. Keep a short break in print. */
+.print.pagina-print hr {
+  margin: 0.5rem 0 !important;
 }
 /* Body H1 only — never the file-name title or Conspectus TOC title. */
 /* Skip the first body H1 so the optional file-name title is not left alone on a page. */

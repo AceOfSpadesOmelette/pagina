@@ -8,7 +8,7 @@ import {
 	downloadSettingsJson,
 	parseSettingsJson,
 } from "./settings-io";
-import { DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings } from "./types";
+import { cheatSheetColumnBounds, clampCheatSheetColumns, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
 export interface RenderPaginaSettingsOptions {
@@ -41,7 +41,7 @@ export function renderPaginaSettings(
 	new Setting(container)
 		.setName("Exam cheat sheet")
 		.setDesc(
-			"Landscape, three columns per page. Page size, margins, headers, and footers stay as set. Turning this off restores your orientation.",
+			"Packs the note into 2, 3, or 4 columns. Page size, orientation, margins, headers, and footers stay as set.",
 		)
 		.addToggle((t) =>
 			t.setValue(settings.cheatSheet).onChange((v) => {
@@ -62,6 +62,18 @@ export function renderPaginaSettings(
 				dd.addOption("continuous", "Continuous");
 				dd.setValue(settings.cheatSheetDensity).onChange((v) => {
 					settings.cheatSheetDensity = v === "continuous" ? "continuous" : "compact";
+					notify();
+				});
+			});
+
+		const columnBounds = cheatSheetColumnBounds();
+		new Setting(container)
+			.setName("Columns")
+			.setDesc("Two, three, or four columns in either orientation.")
+			.addDropdown((dd) => {
+				for (let n = columnBounds.min; n <= columnBounds.max; n++) dd.addOption(String(n), String(n));
+				dd.setValue(String(clampCheatSheetColumns(settings.cheatSheetColumns))).onChange((v) => {
+					settings.cheatSheetColumns = clampCheatSheetColumns(Number(v));
 					notify();
 				});
 			});
@@ -235,23 +247,19 @@ export function renderPaginaSettings(
 				}),
 		);
 
-	if (!settings.cheatSheet) {
-		new Setting(container)
-			.setName("Orientation")
-			.setDesc("Portrait is the default.")
-			.addDropdown((dd) => {
-				dd.addOption("portrait", "Portrait");
-				dd.addOption("landscape", "Landscape");
-				dd.setValue(settings.landscape ? "landscape" : "portrait").onChange((v) => {
-					settings.landscape = v === "landscape";
-					notify();
-				});
+	new Setting(container)
+		.setName("Orientation")
+		.setDesc("Portrait is the default.")
+		.addDropdown((dd) => {
+			dd.addOption("portrait", "Portrait");
+			dd.addOption("landscape", "Landscape");
+			dd.setValue(settings.landscape ? "landscape" : "portrait").onChange((v) => {
+				settings.landscape = v === "landscape";
+				settings.cheatSheetColumns = clampCheatSheetColumns(settings.cheatSheetColumns);
+				notify();
+				opts.onRebuild();
 			});
-	} else {
-		new Setting(container)
-			.setName("Orientation")
-			.setDesc("Exam cheat sheet uses landscape. Your orientation setting is kept for when the cheat sheet is off.");
-	}
+		});
 
 	new Setting(container).setName("PDF").setHeading();
 

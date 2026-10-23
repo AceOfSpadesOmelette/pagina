@@ -109,9 +109,9 @@ export function validateLayout(
 	return null;
 }
 
-/** Cheat sheet forces landscape without changing the saved orientation. */
+/** The orientation the user chose. Cheat sheet does not override it. */
 export function effectiveLandscape(input: { landscape?: boolean; cheatSheet?: boolean }): boolean {
-	return input.cheatSheet === true || input.landscape === true;
+	return input.landscape === true;
 }
 
 export interface LayoutInput {

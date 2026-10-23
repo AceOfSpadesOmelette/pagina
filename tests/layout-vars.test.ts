@@ -9,7 +9,7 @@ import { effectiveLandscape, resolvePageSizeMm, validateLayout } from "../src/pa
 import { CHEAT_SHEET_CSS, PRINT_CSS } from "../src/print-styles";
 import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
-import { DEFAULT_SETTINGS, normalizeSettings } from "../src/types";
+import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
 import { formatTimestamp, renderTemplate } from "../src/variables";
 
 describe("page presets", () => {
@@ -79,6 +79,7 @@ describe("settings", () => {
 		expect(settings.cheatSheet).toBe(false);
 		expect(settings.cheatSheetDensity).toBe("compact");
 		expect(settings.cheatSheetFontSizePt).toBe(8);
+		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
 	});
 
@@ -95,6 +96,12 @@ describe("settings", () => {
 		expect(settings.cheatSheetUniformText).toBe(false);
 		expect(normalizeSettings({ cheatSheetFontSizePt: 40 }).cheatSheetFontSizePt).toBe(14);
 		expect(normalizeSettings({ cheatSheetDensity: "nope" }).cheatSheetDensity).toBe("compact");
+		expect(clampCheatSheetColumns(1)).toBe(2);
+		expect(clampCheatSheetColumns(2)).toBe(2);
+		expect(clampCheatSheetColumns(4)).toBe(4);
+		expect(clampCheatSheetColumns(5)).toBe(4);
+		expect(normalizeSettings({ landscape: false, cheatSheetColumns: 4 }).cheatSheetColumns).toBe(4);
+		expect(normalizeSettings({ landscape: true, cheatSheetColumns: 2 }).cheatSheetColumns).toBe(2);
 	});
 });
 
@@ -112,19 +119,20 @@ describe("isPhoneSession", () => {
 });
 
 describe("exam cheat sheet", () => {
-	it("forces landscape without changing a portrait page setting", () => {
-		expect(effectiveLandscape({ landscape: false, cheatSheet: true })).toBe(true);
-		expect(effectiveLandscape({ landscape: false, cheatSheet: false })).toBe(false);
-		const portrait = computePageLayout({ ...DEFAULT_SETTINGS, landscape: false, cheatSheet: false });
-		const sheet = computePageLayout({ ...DEFAULT_SETTINGS, landscape: false, cheatSheet: true });
-		expect(sheet.pageWidthMm).toBe(portrait.pageHeightMm);
-		expect(sheet.pageHeightMm).toBe(portrait.pageWidthMm);
+	it("uses the saved orientation for a cheat sheet", () => {
+		expect(effectiveLandscape({ landscape: false, cheatSheet: true })).toBe(false);
+		expect(effectiveLandscape({ landscape: true, cheatSheet: true })).toBe(true);
+		const portrait = computePageLayout({ ...DEFAULT_SETTINGS, landscape: false, cheatSheet: true });
+		const landscape = computePageLayout({ ...DEFAULT_SETTINGS, landscape: true, cheatSheet: true });
+		expect(portrait.pageWidthMm).toBeLessThan(portrait.pageHeightMm);
+		expect(landscape.pageWidthMm).toBe(portrait.pageHeightMm);
+		expect(landscape.pageHeightMm).toBe(portrait.pageWidthMm);
 	});
 
 	it("mirrors the three-column rules in styles.css", () => {
 		const css = readFileSync(join(__dirname, "..", "styles.css"), "utf8");
 		for (const marker of [
-			"column-count: 3",
+			"column-count: var(--pagina-cheat-columns, 3)",
 			"column-fill: auto",
 			"pagina-uniform-text",
 			"--pagina-cheat-font-size",
@@ -132,6 +140,7 @@ describe("exam cheat sheet", () => {
 			"page-break-inside: auto",
 			"break-after: avoid-page",
 			"padding: 0 !important",
+			"pagina-cheat-sheet hr",
 		]) {
 			expect(CHEAT_SHEET_CSS).toContain(marker);
 			expect(PRINT_CSS).toContain(marker);
@@ -146,6 +155,8 @@ describe("exam cheat sheet", () => {
 			cheatSheet: true,
 			cheatSheetDensity: "compact",
 			cheatSheetFontSizePt: 9,
+			cheatSheetColumns: 4,
+			landscape: true,
 			cheatSheetUniformText: true,
 		});
 		expect(el.classList.contains("pagina-break-h1")).toBe(false);
@@ -153,9 +164,11 @@ describe("exam cheat sheet", () => {
 		expect(el.classList.contains("pagina-cheat-compact")).toBe(true);
 		expect(el.classList.contains("pagina-uniform-text")).toBe(true);
 		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("9pt");
+		expect(el.style.getPropertyValue("--pagina-cheat-columns")).toBe("4");
 		applyCheatSheetClasses(el, { cheatSheet: false });
 		expect(el.classList.contains("pagina-cheat-sheet")).toBe(false);
 		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("");
+		expect(el.style.getPropertyValue("--pagina-cheat-columns")).toBe("");
 	});
 
 	it("joins text and leaves code, tables, and images as blocks", () => {

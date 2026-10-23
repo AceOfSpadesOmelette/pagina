@@ -11,6 +11,8 @@ import { layoutWarning, MARGIN_OPTIONS, PAGE_SIZE_OPTIONS } from "./page-presets
 import { isPhoneSession } from "./session";
 import { applyImportedSettings, downloadSettingsJson, parseSettingsJson } from "./settings-io";
 import {
+	cheatSheetColumnChoices,
+	clampCheatSheetColumns,
 	clampCheatSheetFontSize,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
@@ -69,6 +71,9 @@ export class PaginaSettingTab extends PluginSettingTab {
 
 	override getControlValue(key: string): unknown {
 		if (key === "orientation") return this.plugin.settings.landscape ? "landscape" : "portrait";
+		if (key === "cheatSheetColumns") {
+			return String(clampCheatSheetColumns(this.plugin.settings.cheatSheetColumns));
+		}
 		const slot = slotKey(key);
 		if (slot) return this.plugin.settings[slot.which][slot.field];
 		return super.getControlValue(key);
@@ -78,7 +83,9 @@ export class PaginaSettingTab extends PluginSettingTab {
 		const settings = this.plugin.settings;
 		if (key === "orientation") {
 			settings.landscape = value === "landscape";
+			settings.cheatSheetColumns = clampCheatSheetColumns(settings.cheatSheetColumns);
 			await this.plugin.saveSettings();
+			this.update();
 			return;
 		}
 		const slot = slotKey(key);
@@ -91,6 +98,11 @@ export class PaginaSettingTab extends PluginSettingTab {
 		if (key === "timestampFormat" && !isTimestampFormat(value)) return;
 		if (key === "cheatSheetDensity") {
 			settings.cheatSheetDensity = value === "continuous" ? "continuous" : "compact";
+			await this.plugin.saveSettings();
+			return;
+		}
+		if (key === "cheatSheetColumns") {
+			settings.cheatSheetColumns = clampCheatSheetColumns(value);
 			await this.plugin.saveSettings();
 			return;
 		}
@@ -129,7 +141,7 @@ export class PaginaSettingTab extends PluginSettingTab {
 				items: [
 					{
 						name: "Exam cheat sheet",
-						desc: "Landscape, three columns per page. Page size, margins, headers, and footers stay as set. Turning this off restores your orientation.",
+						desc: "Packs the note into 2, 3, or 4 columns. Page size, orientation, margins, headers, and footers stay as set.",
 						control: { type: "toggle", key: "cheatSheet" },
 					},
 					{
@@ -140,6 +152,16 @@ export class PaginaSettingTab extends PluginSettingTab {
 							type: "dropdown",
 							key: "cheatSheetDensity",
 							options: { compact: "Compact", continuous: "Continuous" },
+						},
+					},
+					{
+						name: "Columns",
+						desc: "Two, three, or four columns in either orientation.",
+						visible: () => this.plugin.settings.cheatSheet,
+						control: {
+							type: "dropdown",
+							key: "cheatSheetColumns",
+							options: cheatSheetColumnChoices(),
 						},
 					},
 					{
@@ -230,17 +252,11 @@ export class PaginaSettingTab extends PluginSettingTab {
 					{
 						name: "Orientation",
 						desc: "Portrait is the default.",
-						visible: () => !this.plugin.settings.cheatSheet,
 						control: {
 							type: "dropdown",
 							key: "orientation",
 							options: { portrait: "Portrait", landscape: "Landscape" },
 						},
-					},
-					{
-						name: "Orientation",
-						desc: "Exam cheat sheet uses landscape. Your orientation setting is kept for when the cheat sheet is off.",
-						visible: () => this.plugin.settings.cheatSheet,
 					},
 				],
 			},

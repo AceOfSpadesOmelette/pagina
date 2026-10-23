@@ -770,8 +770,10 @@ export interface RenderNoteOptions {
 	underlineH1?: boolean;
 	cheatSheet?: boolean;
 	cheatSheetDensity?: PaginaSettings["cheatSheetDensity"];
+	cheatSheetColumns?: number;
 	cheatSheetFontSizePt?: number;
 	cheatSheetUniformText?: boolean;
+	landscape?: boolean;
 	/** html2canvas fallback: inline images and attach a sanitized stylesheet. */
 	forRaster?: boolean;
 	/** WebView print: same inlined assets, but keep Mermaid as SVG. */
@@ -790,8 +792,10 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	| "underlineH1"
 	| "cheatSheet"
 	| "cheatSheetDensity"
+	| "cheatSheetColumns"
 	| "cheatSheetFontSizePt"
 	| "cheatSheetUniformText"
+	| "landscape"
 > {
 	return {
 		includeTitle: settings.includeFileNameAsTitle,
@@ -800,8 +804,10 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 		underlineH1: settings.underlineH1,
 		cheatSheet: settings.cheatSheet,
 		cheatSheetDensity: settings.cheatSheetDensity,
+		cheatSheetColumns: settings.cheatSheetColumns,
 		cheatSheetFontSizePt: settings.cheatSheetFontSizePt,
 		cheatSheetUniformText: settings.cheatSheetUniformText,
+		landscape: settings.landscape,
 	};
 }
 
@@ -815,8 +821,10 @@ export function applyH1StyleClasses(
 		| "underlineH1"
 		| "cheatSheet"
 		| "cheatSheetDensity"
+		| "cheatSheetColumns"
 		| "cheatSheetFontSizePt"
 		| "cheatSheetUniformText"
+		| "landscape"
 	>,
 ): void {
 	printEl.toggleClass("pagina-break-h1", Boolean(opts.pageBreakBeforeH1) && !opts.cheatSheet);

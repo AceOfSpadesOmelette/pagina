@@ -40,6 +40,19 @@ export type CheatSheetDensity = "compact" | "continuous";
 export const CHEAT_SHEET_FONT_MIN_PT = 6;
 export const CHEAT_SHEET_FONT_MAX_PT = 14;
 export const CHEAT_SHEET_FONT_DEFAULT_PT = 8;
+export const CHEAT_SHEET_COLUMNS_DEFAULT = 3;
+
+/** Two, three, or four columns in either orientation. */
+export function cheatSheetColumnBounds(): { min: number; max: number } {
+	return { min: 2, max: 4 };
+}
+
+export function cheatSheetColumnChoices(): Record<string, string> {
+	const { min, max } = cheatSheetColumnBounds();
+	const options: Record<string, string> = {};
+	for (let n = min; n <= max; n++) options[String(n)] = String(n);
+	return options;
+}
 
 export type TimestampFormat = "none" | "EPOCH" | "YYYYMMDD" | "YYYY-MM-DD" | "YYYYMMDD-HHMMSS";
 
@@ -61,9 +74,11 @@ export interface PaginaSettings {
 	customMarginRightMm: number;
 	downscalePercent: number;
 	landscape: boolean;
-	/** Landscape, three columns. Does not change the saved orientation. */
+	/** Columns per page. Orientation is the page setting, not forced. */
 	cheatSheet: boolean;
 	cheatSheetDensity: CheatSheetDensity;
+	/** 2, 3, or 4 columns in either orientation. */
+	cheatSheetColumns: number;
 	/** Body text size in points while the cheat sheet is on. */
 	cheatSheetFontSizePt: number;
 	/** Headings use the body size. They stay bold. */
@@ -99,6 +114,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 	landscape: false,
 	cheatSheet: false,
 	cheatSheetDensity: "compact",
+	cheatSheetColumns: CHEAT_SHEET_COLUMNS_DEFAULT,
 	cheatSheetFontSizePt: CHEAT_SHEET_FONT_DEFAULT_PT,
 	cheatSheetUniformText: true,
 	displayHeader: false,
@@ -160,6 +176,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		landscape: data.landscape === true,
 		cheatSheet: data.cheatSheet === true,
 		cheatSheetDensity: data.cheatSheetDensity === "continuous" ? "continuous" : "compact",
+		cheatSheetColumns: clampCheatSheetColumns(data.cheatSheetColumns),
 		cheatSheetFontSizePt: clampCheatSheetFontSize(data.cheatSheetFontSizePt),
 		cheatSheetUniformText: data.cheatSheetUniformText ?? DEFAULT_SETTINGS.cheatSheetUniformText,
 		timestampFormat: (["none", "EPOCH", "YYYYMMDD", "YYYY-MM-DD", "YYYYMMDD-HHMMSS"].includes(
@@ -189,4 +206,11 @@ function clamp(n: number, min: number, max: number): number {
 export function clampCheatSheetFontSize(value: unknown): number {
 	const n = typeof value === "number" && Number.isFinite(value) ? value : CHEAT_SHEET_FONT_DEFAULT_PT;
 	return clamp(n, CHEAT_SHEET_FONT_MIN_PT, CHEAT_SHEET_FONT_MAX_PT);
+}
+
+export function clampCheatSheetColumns(value: unknown): number {
+	const { min, max } = cheatSheetColumnBounds();
+	const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+	const n = Number.isFinite(parsed) ? Math.round(parsed) : CHEAT_SHEET_COLUMNS_DEFAULT;
+	return clamp(n, min, max);
 }

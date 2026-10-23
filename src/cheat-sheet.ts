@@ -1,11 +1,13 @@
 import type { CheatSheetDensity } from "./types";
-import { clampCheatSheetFontSize } from "./types";
+import { clampCheatSheetColumns, clampCheatSheetFontSize } from "./types";
 
 export interface CheatSheetStyleInput {
 	cheatSheet?: boolean;
 	cheatSheetDensity?: CheatSheetDensity;
+	cheatSheetColumns?: number;
 	cheatSheetFontSizePt?: number;
 	cheatSheetUniformText?: boolean;
+	landscape?: boolean;
 }
 
 const PROTECTED =
@@ -27,8 +29,13 @@ export function applyCheatSheetClasses(printEl: HTMLElement, settings: CheatShee
 	setClass(printEl, "pagina-uniform-text", on && settings.cheatSheetUniformText !== false);
 	if (on) {
 		printEl.style.setProperty("--pagina-cheat-font-size", `${clampCheatSheetFontSize(settings.cheatSheetFontSizePt)}pt`);
+		printEl.style.setProperty(
+			"--pagina-cheat-columns",
+			String(clampCheatSheetColumns(settings.cheatSheetColumns)),
+		);
 	} else {
 		printEl.style.removeProperty("--pagina-cheat-font-size");
+		printEl.style.removeProperty("--pagina-cheat-columns");
 	}
 }
 
