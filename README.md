@@ -1,42 +1,29 @@
 # Pagina
 
-Export an Obsidian note to PDF, with page size, margins, headers, and footers.
+Export the open note to PDF on desktop. You can set the page size, margins, headers, and footers.
 
-Desktop export uses Obsidian's print-to-PDF path and can open a native Save dialog. Headers and footers can use the same font as the note, including a vault `@font-face`.
+Export is desktop only. Mobile export is turned off until it is reliable.
 
-**Mobile export is disabled** — it is not stable enough yet. Pagina is marked desktop-only until that path is ready.
+Open a note, then use the ribbon icon **Pagina: Export to PDF**, the command **Export current note to PDF**, or **Export to PDF (pagina)** in the file menu or the editor menu. On desktop, Pagina can open a Save dialog.
 
-## Install
+The export window previews the note as the page or as PDF pages. The page is light, and text and controls are adjusted so they stay readable when Obsidian is in dark mode.
 
-Copy these files into `<vault>/.obsidian/plugins/pagina/`:
+## What you can set
 
-- `main.js`
-- `manifest.json`
-- `styles.css`
-- `woff2.cjs`
-- `woff2.wasm`
+Open **Settings → Pagina**, or change the same options in the export window.
 
-Then enable **Pagina** in Settings → Community plugins. Reload Obsidian after replacing the files.
+- Page size, portrait or landscape, margins, and downscale. Portrait is the default.
+- The file name as a title at the top of the export
+- Whether Heading 1 starts a new page, and whether it is centered or underlined
+- A header and a footer, each with left, center, and right text
+- Border style and color for the header and footer
+- Font and text color. A blank font uses the vault’s text font, including a font installed for the vault.
+- PDF preview, printed backgrounds, the outline, metadata, and a timestamp on the file name
+- Whether to open the PDF after export
 
-`woff2.cjs` and `woff2.wasm` are a vendored copy of the [Google woff2](https://github.com/google/woff2) decoder (Apache-2.0). Chromium's header and footer document cannot load a vault `@font-face`, so Pagina decodes that font and stamps the text onto the PDF.
+Under **Backup**, **Export settings** and **Import settings** save or restore that configuration as `pagina-settings.json`.
 
-## Use
-
-Open a note, then use the ribbon icon, the command **Export current note to PDF**, or **Export to PDF (Pagina)** in the file or editor menu.
-
-The export window previews the note as HTML or as PDF pages. Settings cover:
-
-- Page size, orientation, and margins. Orientation is Portrait or Landscape; Portrait is the default.
-- A header and footer, each with left, center, and right slots
-- Border styles and colors for the header and footer
-- Font and text color. A blank font uses the vault text font
-- Date and time formats
-
-**Import settings** and **Export settings** at the bottom of the settings pane save or restore that configuration as `pagina-settings.json`.
-
-The preview and PDF use a light page. Pagina remaps text and interactive colors on that page so embedded controls stay readable when Obsidian is in dark mode.
-
-Slots accept these tokens:
+## Header and footer tokens
 
 | Token | Result |
 | --- | --- |
@@ -46,27 +33,6 @@ Slots accept these tokens:
 | `{{pages}}` | Page count |
 | `{{date}}`, `{{time}}`, `{{datetime}}` | Local date and time |
 | `{{datetime:YYYY-MM-DD}}` | A chosen format |
-| `{{property:key}}` | A frontmatter property |
+| `{{property:key}}` | A property from the note’s properties |
 
 Date formats include `EPOCH`, `YYYYMMDD`, `YYYY-MM-DD`, `YYYYMMDD-HHMMSS`, `YYYY-MM-DD HH:MM`, and `YYYY-MM-DD HH:MM:SS`.
-
-## Build
-
-```bash
-npm install
-npm run build
-```
-
-`npm run build` typechecks the source and writes `main.js`. The woff2 files are not produced by the build; keep them next to `main.js`.
-
-
-
-## Develop
-
-```bash
-npm install
-npm run build
-npm test
-```
-
-CI runs build + Jest on push/PR. Tag a version matching `manifest.json` (for example `1.0.0`) to create a draft GitHub release with `main.js`, `manifest.json`, and `styles.css` when present.
