@@ -354,9 +354,178 @@ function stretchTable(table: HTMLTableElement): void {
 	table.classList.add("pagina-table-full");
 }
 
+/** Slack so subpixel rounding does not wrap a header that essentially fits. */
+const HEADER_LINE_SLOP_PX = 4;
+
+/**
+ * True when every measured header column can stay on one line inside `available`.
+ * An empty list does not count as a fit.
+ */
+export function headerLineFits(widths: readonly number[], available: number): boolean {
+	if (widths.length === 0) return false;
+	let sum = 0;
+	for (const width of widths) sum += width;
+	return sum <= available + HEADER_LINE_SLOP_PX;
+}
+
+function parsePx(value: string): number {
+	const n = Number.parseFloat(value);
+	return Number.isFinite(n) ? n : 0;
+}
+
+/** Width of the cell's contents on one line, without the cell's own padding. */
+function measureNowrapText(cell: HTMLElement): number {
+	const doc = cell.ownerDocument;
+	const host = doc.body;
+	if (!host) return 0;
+	const cs = getComputedStyle(cell);
+	const probe = doc.createElement("span");
+	probe.style.position = "absolute";
+	probe.style.left = "0";
+	probe.style.top = "0";
+	probe.style.visibility = "hidden";
+	probe.style.whiteSpace = "nowrap";
+	probe.style.display = "inline-block";
+	probe.style.width = "max-content";
+	probe.style.maxWidth = "none";
+	probe.style.margin = "0";
+	probe.style.padding = "0";
+	probe.style.border = "0";
+	probe.style.fontStyle = cs.fontStyle;
+	probe.style.fontVariant = cs.fontVariant;
+	probe.style.fontWeight = cs.fontWeight;
+	probe.style.fontStretch = cs.fontStretch;
+	probe.style.fontSize = cs.fontSize;
+	probe.style.lineHeight = cs.lineHeight;
+	probe.style.fontFamily = cs.fontFamily;
+	probe.style.letterSpacing = cs.letterSpacing;
+	probe.style.wordSpacing = cs.wordSpacing;
+	probe.style.textTransform = cs.textTransform;
+	for (const node of Array.from(cell.childNodes)) {
+		probe.appendChild(node.cloneNode(true));
+	}
+	host.appendChild(probe);
+	const width = probe.getBoundingClientRect().width;
+	probe.remove();
+	return width;
+}
+
+/**
+ * `minWidth` is the value to assign under the cell's box-sizing.
+ * `outerWidth` is the space that column needs in the table.
+ */
+function headerSingleLineWidth(cell: HTMLElement): { minWidth: number; outerWidth: number } {
+	const cs = getComputedStyle(cell);
+	const text = measureNowrapText(cell);
+	const extra =
+		parsePx(cs.paddingLeft) +
+		parsePx(cs.paddingRight) +
+		parsePx(cs.borderLeftWidth) +
+		parsePx(cs.borderRightWidth);
+	const outerWidth = Math.ceil(text + extra);
+	const minWidth = cs.boxSizing === "border-box" ? outerWidth : Math.ceil(text);
+	return { minWidth, outerWidth };
+}
+
+/** Header rows: every `thead` row, or the first row when it is all `th`. */
+function headerRows(table: HTMLTableElement): HTMLTableRowElement[] {
+	if (table.tHead && table.tHead.rows.length > 0) return Array.from(table.tHead.rows);
+	const first = table.rows[0];
+	if (!first || first.cells.length === 0) return [];
+	for (const cell of first.cells) {
+		if (cell.tagName !== "TH") return [];
+	}
+	return [first];
+}
+
+interface HeaderEntry {
+	cell: HTMLTableCellElement;
+	column: number;
+	lockable: boolean;
+	minWidth: number;
+	outerWidth: number;
+}
+
+function headerEntries(table: HTMLTableElement, measuredWidths?: readonly number[]): HeaderEntry[] {
+	const entries: HeaderEntry[] = [];
+	let seen = 0;
+	for (const row of headerRows(table)) {
+		let column = 0;
+		for (const cell of row.cells) {
+			const span = cell.colSpan > 0 ? cell.colSpan : 1;
+			if (cell.tagName === "TH") {
+				const lockable = cell.colSpan === 1 && cell.querySelector("br") == null;
+				const provided = measuredWidths?.[seen];
+				seen += 1;
+				let minWidth = 0;
+				let outerWidth = 0;
+				if (lockable) {
+					if (provided != null) {
+						minWidth = provided;
+						outerWidth = provided;
+					} else if (measuredWidths == null) {
+						const measured = headerSingleLineWidth(cell);
+						minWidth = measured.minWidth;
+						outerWidth = measured.outerWidth;
+					}
+				}
+				entries.push({ cell, column, lockable, minWidth, outerWidth });
+			}
+			column += span;
+		}
+	}
+	return entries;
+}
+
+function lockHeaderCell(cell: HTMLElement, minWidth: number): void {
+	cell.style.whiteSpace = "nowrap";
+	cell.style.overflowWrap = "normal";
+	cell.style.wordBreak = "normal";
+	cell.style.minWidth = `${minWidth}px`;
+}
+
+function wrapHeaderCell(cell: HTMLElement): void {
+	cell.style.whiteSpace = "normal";
+	cell.style.overflowWrap = "break-word";
+	cell.style.wordBreak = "normal";
+	cell.style.removeProperty("min-width");
+}
+
+/**
+ * Keep header cells on one line when that row fits in `availableWidth`.
+ * Otherwise wrap them at spaces so a short word is not split.
+ * A `br` or colspan is never forced onto one line.
+ * Pass `measuredWidths` in header-cell order to skip layout measurement.
+ * Tables with no header row are left unchanged.
+ */
+export function applyHeaderLinePreference(
+	table: HTMLTableElement,
+	availableWidth: number,
+	measuredWidths?: readonly number[],
+): void {
+	const entries = headerEntries(table, measuredWidths);
+	if (entries.length === 0) return;
+	const columnWidth = new Map<number, number>();
+	for (const entry of entries) {
+		if (!entry.lockable) continue;
+		const prev = columnWidth.get(entry.column) ?? 0;
+		if (entry.outerWidth > prev) columnWidth.set(entry.column, entry.outerWidth);
+	}
+	const lock = headerLineFits([...columnWidth.values()], availableWidth);
+	for (const entry of entries) {
+		if (lock && entry.lockable) lockHeaderCell(entry.cell, entry.minWidth);
+		else wrapHeaderCell(entry.cell);
+	}
+}
+
+function preferSingleLineHeaders(table: HTMLTableElement, fallbackWidth: number): void {
+	applyHeaderLinePreference(table, table.clientWidth || fallbackWidth);
+}
+
 /**
  * Keep every column of a wide table on the page by compacting padding, then
  * scaling only that table. Tables that can wrap stay at 100% and body size.
+ * Header cells stay on one line when that row fits in the table.
  */
 export function fitWideTables(root: HTMLElement): void {
 	const hostWidth = printableWidth(root);
@@ -366,6 +535,7 @@ export function fitWideTables(root: HTMLElement): void {
 
 		stretchTable(table);
 		void table.offsetWidth;
+		preferSingleLineHeaders(table, hostWidth);
 
 		let needed = tableMinContentWidth(table);
 		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
@@ -375,6 +545,7 @@ export function fitWideTables(root: HTMLElement): void {
 
 		table.classList.add("pagina-table-compact");
 		void table.offsetWidth;
+		preferSingleLineHeaders(table, hostWidth);
 		needed = tableMinContentWidth(table);
 		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
 			stretchTable(table);

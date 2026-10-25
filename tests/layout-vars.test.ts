@@ -6,7 +6,7 @@ import { contentBoxHasText } from "../src/blank-page";
 import { sanitizeCssText } from "../src/css-sanitize";
 import { computePageLayout } from "../src/paginate";
 import { effectiveLandscape, resolvePageSizeMm, validateLayout } from "../src/page-presets";
-import { CHEAT_SHEET_CSS, PRINT_CSS } from "../src/print-styles";
+import { applyHeaderLinePreference, CHEAT_SHEET_CSS, headerLineFits, PRINT_CSS } from "../src/print-styles";
 import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
 import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
@@ -233,5 +233,77 @@ describe("exam cheat sheet", () => {
 		expect(
 			contentBoxHasText([{ text: "Notes", x: 200, y: 300 }], page, margins),
 		).toBe(true);
+	});
+});
+
+describe("table header lines", () => {
+	it("keeps a header row on one line when the cells fit", () => {
+		expect(headerLineFits([48, 40], 88)).toBe(true);
+		expect(headerLineFits([48, 40], 40)).toBe(false);
+		expect(headerLineFits([], 200)).toBe(false);
+
+		const table = document.createElement("table");
+		table.innerHTML = "<thead><tr><th>Symbol</th><th>Name</th></tr></thead>";
+		applyHeaderLinePreference(table, 200, [48, 40]);
+		const cells = [...table.querySelectorAll("th")];
+		expect(cells.map((cell) => cell.style.whiteSpace)).toEqual(["nowrap", "nowrap"]);
+		expect(cells.map((cell) => cell.style.overflowWrap)).toEqual(["normal", "normal"]);
+		expect(cells.map((cell) => cell.style.wordBreak)).toEqual(["normal", "normal"]);
+		expect(cells.map((cell) => cell.style.minWidth)).toEqual(["48px", "40px"]);
+
+		const bare = document.createElement("table");
+		bare.innerHTML = "<tr><th>Symbol</th><th>Name</th></tr>";
+		applyHeaderLinePreference(bare, 200, [48, 40]);
+		expect([...bare.querySelectorAll("th")].map((cell) => cell.style.whiteSpace)).toEqual(["nowrap", "nowrap"]);
+	});
+
+	it("wraps headers at word boundaries when one line does not fit", () => {
+		const table = document.createElement("table");
+		table.innerHTML = "<thead><tr><th>Symbol</th><th>Description</th></tr></thead>";
+		applyHeaderLinePreference(table, 400, [48, 90]);
+		applyHeaderLinePreference(table, 100, [48, 90]);
+		for (const cell of table.querySelectorAll("th")) {
+			expect(cell.style.whiteSpace).toBe("normal");
+			expect(cell.style.overflowWrap).toBe("break-word");
+			expect(cell.style.wordBreak).toBe("normal");
+			expect(cell.style.minWidth).toBe("");
+		}
+	});
+
+	it("leaves a table with no header row unchanged", () => {
+		const table = document.createElement("table");
+		table.innerHTML = "<tr><td>Symbol</td><td>Name</td></tr><tr><th>Row</th><td>Value</td></tr>";
+		applyHeaderLinePreference(table, 400, [48, 40, 30, 20]);
+		for (const cell of table.querySelectorAll("td, th")) {
+			expect(cell.getAttribute("style")).toBeNull();
+		}
+	});
+
+	it("does not force a broken or spanned header onto one line", () => {
+		const table = document.createElement("table");
+		table.innerHTML = "<thead><tr><th>Symbol</th><th>Line<br>break</th><th colspan='2'>Wide</th></tr></thead>";
+		applyHeaderLinePreference(table, 400, [48, 200, 300]);
+		const cells = [...table.querySelectorAll("th")];
+		expect(cells[0]?.style.whiteSpace).toBe("nowrap");
+		expect(cells[0]?.style.minWidth).toBe("48px");
+		expect(cells[1]?.style.whiteSpace).toBe("normal");
+		expect(cells[1]?.style.overflowWrap).toBe("break-word");
+		expect(cells[1]?.style.minWidth).toBe("");
+		expect(cells[2]?.style.whiteSpace).toBe("normal");
+		expect(cells[2]?.style.minWidth).toBe("");
+	});
+
+	it("uses the wider header when two header rows share a column", () => {
+		const table = document.createElement("table");
+		table.innerHTML = "<thead><tr><th>Symbol</th></tr><tr><th>Sym</th></tr></thead>";
+		applyHeaderLinePreference(table, 50, [40, 30]);
+		for (const cell of table.querySelectorAll("th")) {
+			expect(cell.style.whiteSpace).toBe("nowrap");
+		}
+		applyHeaderLinePreference(table, 20, [40, 30]);
+		for (const cell of table.querySelectorAll("th")) {
+			expect(cell.style.whiteSpace).toBe("normal");
+			expect(cell.style.minWidth).toBe("");
+		}
 	});
 });
