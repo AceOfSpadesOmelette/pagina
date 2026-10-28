@@ -87,6 +87,12 @@ export interface PaginaSettings {
 	header: HeaderFooterSlots;
 	displayFooter: boolean;
 	footer: HeaderFooterSlots;
+	/** Heading level substituted for {{section}}. */
+	sectionHeadingLevel: MaxHeadingLevel;
+	/** Contents lines jump to their headings. */
+	linkTocEntries: boolean;
+	/** Heading text jumps back to the first printed table of contents. */
+	linkHeadingText: boolean;
 	openAfterExport: boolean;
 	printBackground: boolean;
 	generateTaggedPDF: boolean;
@@ -139,6 +145,9 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 		fontFamily: "",
 		datetimeFormat: "locale",
 	},
+	sectionHeadingLevel: "1",
+	linkTocEntries: true,
+	linkHeadingText: true,
 	openAfterExport: true,
 	printBackground: true,
 	generateTaggedPDF: false,
@@ -179,6 +188,11 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		cheatSheetColumns: clampCheatSheetColumns(data.cheatSheetColumns),
 		cheatSheetFontSizePt: clampCheatSheetFontSize(data.cheatSheetFontSizePt),
 		cheatSheetUniformText: data.cheatSheetUniformText ?? DEFAULT_SETTINGS.cheatSheetUniformText,
+		sectionHeadingLevel: (["1", "2", "3", "4", "5", "6"].includes(String(data.sectionHeadingLevel))
+			? String(data.sectionHeadingLevel)
+			: DEFAULT_SETTINGS.sectionHeadingLevel) as MaxHeadingLevel,
+		linkTocEntries: data.linkTocEntries ?? DEFAULT_SETTINGS.linkTocEntries,
+		linkHeadingText: data.linkHeadingText ?? DEFAULT_SETTINGS.linkHeadingText,
 		timestampFormat: (["none", "EPOCH", "YYYYMMDD", "YYYY-MM-DD", "YYYYMMDD-HHMMSS"].includes(
 			String(data.timestampFormat),
 		)

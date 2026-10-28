@@ -120,6 +120,33 @@ if (typeof htmlProto.addClass !== "function") {
 	};
 }
 
+type DomOpts = { cls?: string; attr?: Record<string, string>; text?: string };
+
+function applyDom(el: HTMLElement, o?: DomOpts): HTMLElement {
+	if (!o) return el;
+	if (o.cls) el.classList.add(...o.cls.split(/\s+/).filter(Boolean));
+	if (o.attr) {
+		for (const [key, value] of Object.entries(o.attr)) el.setAttribute(key, value);
+	}
+	if (o.text) el.textContent = o.text;
+	return el;
+}
+
+const testGlobals = globalThis as typeof globalThis & {
+	createDiv?: (o?: DomOpts) => HTMLDivElement;
+	createEl?: (tag: string, o?: DomOpts, cb?: (el: HTMLElement) => void) => HTMLElement;
+};
+if (typeof testGlobals.createDiv !== "function") {
+	testGlobals.createDiv = (o?: DomOpts) => applyDom(document.createElement("div"), o) as HTMLDivElement;
+}
+if (typeof testGlobals.createEl !== "function") {
+	testGlobals.createEl = (tag: string, o?: DomOpts, cb?: (el: HTMLElement) => void) => {
+		const el = applyDom(document.createElement(tag), o);
+		cb?.(el);
+		return el;
+	};
+}
+
 export function loadPdfJs(): Promise<unknown> {
 	return Promise.resolve({});
 }

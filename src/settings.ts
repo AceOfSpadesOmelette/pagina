@@ -95,6 +95,7 @@ export class PaginaSettingTab extends PluginSettingTab {
 			return;
 		}
 		if (key === "maxHeadingLevel" && !isHeadingLevel(value)) return;
+		if (key === "sectionHeadingLevel" && !isHeadingLevel(value)) return;
 		if (key === "timestampFormat" && !isTimestampFormat(value)) return;
 		if (key === "cheatSheetDensity") {
 			settings.cheatSheetDensity = value === "continuous" ? "continuous" : "compact";
@@ -277,8 +278,18 @@ export class PaginaSettingTab extends PluginSettingTab {
 					},
 					{
 						name: "Generate tagged PDF",
-						desc: "Experimental accessible MarkInfo flag. Image-based export may not fully meet PDF/UA.",
+						desc: "Add accessibility structure so screen readers can follow headings and paragraphs. The image-based export cannot be fully tagged.",
 						control: { type: "toggle", key: "generateTaggedPDF" },
+					},
+					{
+						name: "Link table of contents entries",
+						desc: "Contents lines jump to the matching heading. Turn off to leave those lines as plain text.",
+						control: { type: "toggle", key: "linkTocEntries" },
+					},
+					{
+						name: "Link heading text",
+						desc: "Heading text jumps back to the first printed table of contents. Turn off to make headings easier to select.",
+						control: { type: "toggle", key: "linkHeadingText" },
 					},
 					{
 						name: "Max headings level of the outline",
@@ -315,6 +326,15 @@ export class PaginaSettingTab extends PluginSettingTab {
 				type: "group",
 				heading: "Header",
 				items: [
+					{
+						name: "Section heading level",
+						desc: "Heading level used by {{section}} in the header or footer. If that level does not appear in the note, each page shows the deepest heading still in effect at the top. A later heading replaces one of the same or deeper level.",
+						control: {
+							type: "dropdown",
+							key: "sectionHeadingLevel",
+							options: { "1": "Heading 1", "2": "Heading 2", "3": "Heading 3", "4": "Heading 4", "5": "Heading 5", "6": "Heading 6" },
+						},
+					},
 					{
 						name: "Display header",
 						desc: VARIABLE_HINT,

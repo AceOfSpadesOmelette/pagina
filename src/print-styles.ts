@@ -240,6 +240,35 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
   display: none;
 }
+.print.pagina-print h1 > a.pagina-heading-toc-link,
+.print.pagina-print h2 > a.pagina-heading-toc-link,
+.print.pagina-print h3 > a.pagina-heading-toc-link,
+.print.pagina-print h4 > a.pagina-heading-toc-link,
+.print.pagina-print h5 > a.pagina-heading-toc-link,
+.print.pagina-print h6 > a.pagina-heading-toc-link {
+  color: inherit;
+  text-decoration: none;
+}
+.print.pagina-print .conspectus-toc-entry {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+}
+.print.pagina-print .conspectus-toc-leader {
+  flex: 1 1 auto;
+  border-bottom: 1px dotted currentColor;
+  margin-bottom: 0.2em;
+  margin-left: 0.35em;
+}
+.print.pagina-print .conspectus-toc-page {
+  flex: 0 0 auto;
+  margin-left: 0.5em;
+  white-space: nowrap;
+  text-align: right;
+}
+.print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
+  margin-left: auto;
+}
 .print.pagina-print .pagina-forced-break {
   page-break-before: always;
   display: block;
@@ -292,6 +321,35 @@ ${LIGHT_PRINT_SURFACE_CSS}
   }
   .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
     display: none;
+  }
+  .print.pagina-print h1 > a.pagina-heading-toc-link,
+  .print.pagina-print h2 > a.pagina-heading-toc-link,
+  .print.pagina-print h3 > a.pagina-heading-toc-link,
+  .print.pagina-print h4 > a.pagina-heading-toc-link,
+  .print.pagina-print h5 > a.pagina-heading-toc-link,
+  .print.pagina-print h6 > a.pagina-heading-toc-link {
+    color: inherit;
+    text-decoration: none;
+  }
+  .print.pagina-print .conspectus-toc-entry {
+    display: flex;
+    align-items: baseline;
+    width: 100%;
+  }
+  .print.pagina-print .conspectus-toc-leader {
+    flex: 1 1 auto;
+    border-bottom: 1px dotted currentColor;
+    margin-bottom: 0.2em;
+    margin-left: 0.35em;
+  }
+  .print.pagina-print .conspectus-toc-page {
+    flex: 0 0 auto;
+    margin-left: 0.5em;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
+    margin-left: auto;
   }
   .print.pagina-print .pagina-forced-break {
     page-break-before: always;
@@ -522,40 +580,77 @@ function preferSingleLineHeaders(table: HTMLTableElement, fallbackWidth: number)
 	applyHeaderLinePreference(table, table.clientWidth || fallbackWidth);
 }
 
+/** `column-gap` on `.pagina-cheat-sheet` (see CHEAT_SHEET_CSS). */
+const CHEAT_SHEET_COLUMN_GAP_MM = 4;
+/** CSS pixels per millimetre at 96dpi, matching Chromium. */
+const CSS_PX_PER_MM = 96 / 25.4;
+
+/**
+ * Width of one cheat-sheet column inside a host `hostWidth` px wide.
+ * Subtracts the same 4mm gap the cheat-sheet CSS inserts between columns.
+ */
+export function cheatSheetColumnWidth(hostWidth: number, columns: number): number {
+	const count = Math.max(1, Math.floor(columns));
+	const gapPx = CHEAT_SHEET_COLUMN_GAP_MM * CSS_PX_PER_MM;
+	return Math.max(1, (hostWidth - gapPx * (count - 1)) / count);
+}
+
+/**
+ * Cheat-sheet column count, or null when this export is not a cheat sheet.
+ * The class and `--pagina-cheat-columns` live on the print host, not the preview.
+ */
+function cheatSheetColumnCount(root: HTMLElement): number | null {
+	const sheet = root.closest(".pagina-cheat-sheet");
+	if (!(sheet instanceof HTMLElement)) return null;
+	const raw = sheet.style.getPropertyValue("--pagina-cheat-columns").trim();
+	const parsed = Number.parseInt(raw, 10);
+	if (!Number.isFinite(parsed) || parsed < 1) return 3;
+	return parsed;
+}
+
 /**
  * Keep every column of a wide table on the page by compacting padding, then
  * scaling only that table. Tables that can wrap stay at 100% and body size.
- * Header cells stay on one line when that row fits in the table.
+ * Header cells stay on one line when that row fits the fit budget.
+ * A cheat sheet budgets one CSS column, not the full page, so a table cannot
+ * paint into the next column.
  */
 export function fitWideTables(root: HTMLElement): void {
 	const hostWidth = printableWidth(root);
+	const columns = cheatSheetColumnCount(root);
+	const availableWidth = columns == null ? hostWidth : cheatSheetColumnWidth(hostWidth, columns);
 	root.querySelectorAll("table").forEach((node) => {
 		const table = node;
 		if (table.closest(".pagina-table-fit")) return;
 
 		stretchTable(table);
 		void table.offsetWidth;
-		preferSingleLineHeaders(table, hostWidth);
+		if (columns == null) preferSingleLineHeaders(table, hostWidth);
+		else applyHeaderLinePreference(table, availableWidth);
 
 		let needed = tableMinContentWidth(table);
-		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
+		if (needed <= availableWidth + TABLE_FIT_SLOP_PX) {
 			stretchTable(table);
 			return;
 		}
 
 		table.classList.add("pagina-table-compact");
 		void table.offsetWidth;
-		preferSingleLineHeaders(table, hostWidth);
+		if (columns == null) preferSingleLineHeaders(table, hostWidth);
+		else applyHeaderLinePreference(table, availableWidth);
 		needed = tableMinContentWidth(table);
-		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
+		if (needed <= availableWidth + TABLE_FIT_SLOP_PX) {
 			stretchTable(table);
 			return;
 		}
 
-		const scale = Math.min(1, hostWidth / needed);
+		const scale = Math.min(1, availableWidth / needed);
 
 		const wrap = createDiv({ cls: "pagina-table-fit" });
 		wrap.style.width = `${needed}px`;
+		// The column is narrower than this table's min-content. max-width: 100%
+		// would clamp the pre-zoom width and then zoom would shrink it again.
+		if (columns != null) wrap.style.maxWidth = "none";
 		wrap.style.setProperty("zoom", String(scale));
 		table.parentNode?.insertBefore(wrap, table);
 		wrap.appendChild(table);

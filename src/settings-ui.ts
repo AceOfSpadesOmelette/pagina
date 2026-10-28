@@ -288,7 +288,7 @@ export function renderPaginaSettings(
 	new Setting(container)
 		.setName("Generate tagged PDF")
 		.setDesc(
-			"Experimental accessible markinfo flag. Image-based export may not fully meet PDF/ua.",
+			"Add accessibility structure so screen readers can follow headings and paragraphs. The image-based export cannot be fully tagged.",
 		)
 		.addToggle((t) =>
 			t.setValue(settings.generateTaggedPDF).onChange((v) => {
@@ -335,7 +335,40 @@ export function renderPaginaSettings(
 			});
 		});
 
+	new Setting(container)
+		.setName("Link table of contents entries")
+		.setDesc("Contents lines jump to the matching heading. Turn off to leave those lines as plain text.")
+		.addToggle((t) =>
+			t.setValue(settings.linkTocEntries).onChange((v) => {
+				settings.linkTocEntries = v;
+				notify();
+			}),
+		);
+
+	new Setting(container)
+		.setName("Link heading text")
+		.setDesc("Heading text jumps back to the first printed table of contents. Turn off to make headings easier to select.")
+		.addToggle((t) =>
+			t.setValue(settings.linkHeadingText).onChange((v) => {
+				settings.linkHeadingText = v;
+				notify();
+			}),
+		);
+
 	new Setting(container).setName("Header").setHeading();
+
+	new Setting(container)
+		.setName("Section heading level")
+		.setDesc("Heading level used by {{section}} in the header or footer. If that level does not appear in the note, each page shows the deepest heading still in effect at the top. A later heading replaces one of the same or deeper level.")
+		.addDropdown((dd) => {
+			for (const level of ["1", "2", "3", "4", "5", "6"]) {
+				dd.addOption(level, `Heading ${level}`);
+			}
+			dd.setValue(settings.sectionHeadingLevel).onChange((v) => {
+				settings.sectionHeadingLevel = v as PaginaSettings["sectionHeadingLevel"];
+				notify();
+			});
+		});
 
 	new Setting(container)
 		.setName("Display header")

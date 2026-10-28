@@ -338,6 +338,35 @@
 	.print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
 		display: none;
 	}
+	.print.pagina-print h1 > a.pagina-heading-toc-link,
+	.print.pagina-print h2 > a.pagina-heading-toc-link,
+	.print.pagina-print h3 > a.pagina-heading-toc-link,
+	.print.pagina-print h4 > a.pagina-heading-toc-link,
+	.print.pagina-print h5 > a.pagina-heading-toc-link,
+	.print.pagina-print h6 > a.pagina-heading-toc-link {
+		color: inherit;
+		text-decoration: none;
+	}
+	.print.pagina-print .conspectus-toc-entry {
+		display: flex;
+		align-items: baseline;
+		width: 100%;
+	}
+	.print.pagina-print .conspectus-toc-leader {
+		flex: 1 1 auto;
+		border-bottom: 1px dotted currentColor;
+		margin-bottom: 0.2em;
+		margin-left: 0.35em;
+	}
+	.print.pagina-print .conspectus-toc-page {
+		flex: 0 0 auto;
+		margin-left: 0.5em;
+		white-space: nowrap;
+		text-align: right;
+	}
+	.print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
+		margin-left: auto;
+	}
 	.print.pagina-print .pagina-forced-break {
 		page-break-before: always;
 		display: block;
@@ -355,6 +384,35 @@
 	color: #222222;
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
+}
+.print.pagina-print h1 > a.pagina-heading-toc-link,
+.print.pagina-print h2 > a.pagina-heading-toc-link,
+.print.pagina-print h3 > a.pagina-heading-toc-link,
+.print.pagina-print h4 > a.pagina-heading-toc-link,
+.print.pagina-print h5 > a.pagina-heading-toc-link,
+.print.pagina-print h6 > a.pagina-heading-toc-link {
+	color: inherit;
+	text-decoration: none;
+}
+.print.pagina-print .conspectus-toc-entry {
+	display: flex;
+	align-items: baseline;
+	width: 100%;
+}
+.print.pagina-print .conspectus-toc-leader {
+	flex: 1 1 auto;
+	border-bottom: 1px dotted currentColor;
+	margin-bottom: 0.2em;
+	margin-left: 0.35em;
+}
+.print.pagina-print .conspectus-toc-page {
+	flex: 0 0 auto;
+	margin-left: 0.5em;
+	white-space: nowrap;
+	text-align: right;
+}
+.print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
+	margin-left: auto;
 }
 .print.pagina-print table {
 	border-collapse: collapse;

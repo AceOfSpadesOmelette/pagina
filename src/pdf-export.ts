@@ -30,6 +30,7 @@ import {
 	applyPdfPostProcess,
 	buildOutlineTree,
 	collectHeadings,
+	getDestPosition,
 	type OutlineItem,
 } from "./outline";
 import {
@@ -45,6 +46,18 @@ import {
 } from "./electron-pdf";
 import { stampHeaderFooter } from "./stamp-header-footer";
 import { loadEmbeddableFont, vaultTextFontFamily, type VaultFontFiles } from "./vault-font";
+import { fillTocPageNumbers } from "./toc-layout";
+import {
+	contentTopY,
+	placeSectionHeadings,
+	readSectionHeadings,
+	SECTION_TOP_SLACK_PX,
+	sectionHeadingsFromOffsets,
+	sectionHeadingsInContentBox,
+	sectionTitlesForDocument,
+	sectionTitleForPage,
+	slotsUseSection,
+} from "./section-title";
 
 export interface BuildPdfResult {
 	bytes: Uint8Array;
@@ -152,17 +165,29 @@ async function buildPdfBytesElectron(
 		const footerFace = footerLoaded.bytes;
 		if (headerLoaded.error) new Notice(headerLoaded.error);
 		if (footerLoaded.error && footerLoaded.error !== headerLoaded.error) new Notice(footerLoaded.error);
+		const headerUsesSection = settings.displayHeader && slotsUseSection(settings.header);
+		const footerUsesSection = settings.displayFooter && slotsUseSection(settings.footer);
 		const options = makeElectronPrintOptions(settings, ctx, rendered.printEl, {
-			headerOmitText: headerFace != null,
-			footerOmitText: footerFace != null,
+			headerOmitText: headerFace != null || headerUsesSection,
+			footerOmitText: footerFace != null || footerUsesSection,
 		});
 		await applyExportContentBox(rendered, layout);
-		const raw = await printElementToPdf(
+		let raw = await printElementToPdf(
 			rendered.printEl,
 			options,
 			tempPdfPath(file.path),
 			file.basename,
 		);
+		if (rendered.contentEl.querySelector(".conspectus-toc-page")) {
+			const probe = await PDFDocument.load(raw);
+			fillTocPageNumbers(rendered.contentEl, await getDestPosition(probe));
+			raw = await printElementToPdf(
+				rendered.printEl,
+				options,
+				tempPdfPath(file.path),
+				file.basename,
+			);
+		}
 		const processed = await applyPdfPostProcess(copyBuffer(raw), {
 			headingRoot: rendered.contentEl,
 			maxLevel: Number(settings.maxHeadingLevel) || 6,
@@ -178,6 +203,17 @@ async function buildPdfBytesElectron(
 				dropped.removed &&
 				((settings.displayHeader && !headerFace) || (settings.displayFooter && !footerFace));
 		}
+		const stampFallback =
+			redrawEdges || (headerUsesSection && !headerFace) || (footerUsesSection && !footerFace);
+		let sections: string[] | undefined;
+		if (headerUsesSection || footerUsesSection) {
+			sections = await sectionTitlesFromPrintedPdf(
+				printable,
+				rendered.contentEl,
+				Number(settings.sectionHeadingLevel) || 1,
+				resolvePrintMarginsMm(settings).top,
+			);
+		}
 		const stamped = await stampHeaderFooter(
 			printable,
 			settings,
@@ -186,12 +222,50 @@ async function buildPdfBytesElectron(
 				header: headerFace,
 				footer: footerFace,
 			},
-			redrawEdges ? { cover: true, standardFallback: true } : undefined,
+			{
+				...(redrawEdges ? { cover: true } : {}),
+				...(stampFallback ? { standardFallback: true } : {}),
+				...(sections ? { sections } : {}),
+			},
 		);
 		return { bytes: copyBytes(stamped), totalPages: 0 };
 	} finally {
 		if (shouldCleanup) rendered.cleanup();
 	}
+}
+
+async function sectionTitlesFromPrintedPdf(
+	bytes: Uint8Array,
+	root: ParentNode,
+	level: number,
+	marginTopMm: number,
+): Promise<string[]> {
+	const doc = await PDFDocument.load(bytes);
+	const positions = await getDestPosition(doc);
+	const placed = placeSectionHeadings(readSectionHeadings(root), positions);
+	return doc.getPages().map((page, pageIndex) =>
+		sectionTitleForPage(placed, pageIndex, level, contentTopY(page.getHeight(), marginTopMm)),
+	);
+}
+
+function rasterSectionTitles(
+	root: HTMLElement,
+	pageHeightPx: number,
+	pageCount: number,
+	settings: PaginaSettings,
+): string[] {
+	const uses =
+		(settings.displayHeader && slotsUseSection(settings.header)) ||
+		(settings.displayFooter && slotsUseSection(settings.footer));
+	if (!uses) return [];
+	const placed = sectionHeadingsFromOffsets(sectionHeadingsInContentBox(root), pageHeightPx);
+	return sectionTitlesForDocument(
+		placed,
+		pageCount,
+		Number(settings.sectionHeadingLevel) || 1,
+		pageHeightPx,
+		SECTION_TOP_SLACK_PX,
+	);
 }
 
 export async function buildPdfBytesRaster(
@@ -232,6 +306,7 @@ export async function buildPdfBytesRaster(
 		const totalHeight = Math.ceil(Math.max(contentEl.scrollHeight, contentEl.offsetHeight, 1));
 		const pageHeight = Math.max(1, Math.ceil(layout.contentHeightPx));
 		const totalPages = Math.max(1, Math.ceil(totalHeight / pageHeight));
+		const sectionTitles = rasterSectionTitles(contentEl, pageHeight, totalPages, settings);
 		const scale = captureScale(contentWidth, Math.min(pageHeight, totalHeight));
 
 		const pdf = await PDFDocument.create();
@@ -323,6 +398,7 @@ export async function buildPdfBytesRaster(
 					pages: totalPages,
 					frontmatter,
 					now,
+					section: sectionTitles[pageIndex] ?? "",
 				};
 				drawHeaderFooter(page, pageHeightPt, font, settings, layout, varCtx);
 			}

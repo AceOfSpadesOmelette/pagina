@@ -1,5 +1,6 @@
 import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, requestUrl, TFile } from "obsidian";
 import type { PaginaSettings } from "./types";
+import { clearConspectusEntryLinks, layoutConspectusPageNumbers } from "./toc-layout";
 import { applyCheatSheetClasses, applyContinuousText } from "./cheat-sheet";
 import { sanitizeCssText } from "./css-sanitize";
 import { stampImageRequests } from "./image-fit";
@@ -599,6 +600,52 @@ export function wireConspectusTocLinks(root: ParentNode): void {
 	});
 }
 
+/** Print flag for the first Conspectus block included in the PDF. */
+const TOC_ANCHOR_FLAG = "conspectus-toc";
+
+/**
+ * When a Conspectus block is printed, mark it with `af://conspectus-toc` and
+ * wrap each section heading's text in a link back to that marker.
+ * The heading's own `af://` position marker stays outside the link.
+ */
+export function wireHeadingBackToToc(root: ParentNode): void {
+	const tocs = Array.from(root.querySelectorAll<HTMLElement>(".conspectus-toc")).filter(
+		(toc) => !toc.classList.contains("conspectus-toc-hide-export"),
+	);
+	const toc = tocs[0];
+	if (!toc) return;
+
+	if (!toc.querySelector(`a.md-print-anchor[data-flag="${TOC_ANCHOR_FLAG}"]`)) {
+		const marker = document.createElement("a");
+		marker.setAttribute("href", `af://${TOC_ANCHOR_FLAG}`);
+		marker.className = "md-print-anchor";
+		marker.dataset.flag = TOC_ANCHOR_FLAG;
+		toc.insertBefore(marker, toc.firstChild);
+	}
+
+	root.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6").forEach((heading) => {
+		if (heading.classList.contains("__title__")) return;
+		if (heading.classList.contains("conspectus-toc-title")) return;
+		if (heading.closest(".conspectus-toc")) return;
+		wrapHeadingTextForToc(heading);
+	});
+}
+
+function wrapHeadingTextForToc(heading: HTMLElement): void {
+	const movable: ChildNode[] = [];
+	for (const child of Array.from(heading.childNodes)) {
+		if (child instanceof HTMLAnchorElement) continue;
+		movable.push(child);
+	}
+	if (movable.length === 0) return;
+
+	const link = document.createElement("a");
+	link.className = "pagina-heading-toc-link";
+	link.setAttribute("href", `an://${TOC_ANCHOR_FLAG}`);
+	heading.insertBefore(link, movable[0]!);
+	for (const node of movable) link.appendChild(node);
+}
+
 function toLowerMap(map: Map<string, string>): Map<string, string> {
 	return new Map(Array.from(map).map(([key, value]) => [key.toLowerCase(), value]));
 }
@@ -781,6 +828,10 @@ export interface RenderNoteOptions {
 	/** When false, the raster fallback leaves Mermaid SVG in place. */
 	bakeMermaid?: boolean;
 	contentWidthPx?: number;
+	/** Contents lines jump to headings. Defaults to on. */
+	linkTocEntries?: boolean;
+	/** Heading text jumps back to the table of contents. Defaults to on. */
+	linkHeadingText?: boolean;
 }
 
 /** Fields renderNoteForExport reads off a settings object. */
@@ -796,6 +847,8 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	| "cheatSheetFontSizePt"
 	| "cheatSheetUniformText"
 	| "landscape"
+	| "linkTocEntries"
+	| "linkHeadingText"
 > {
 	return {
 		includeTitle: settings.includeFileNameAsTitle,
@@ -808,6 +861,8 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 		cheatSheetFontSizePt: settings.cheatSheetFontSizePt,
 		cheatSheetUniformText: settings.cheatSheetUniformText,
 		landscape: settings.landscape,
+		linkTocEntries: settings.linkTocEntries,
+		linkHeadingText: settings.linkHeadingText,
 	};
 }
 
@@ -898,6 +953,9 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	const dest = addHeadingAnchors(viewEl);
 	fixInternalAnchors(viewEl, dest, file.basename);
 	wireConspectusTocLinks(viewEl);
+	if (opts.linkHeadingText !== false) wireHeadingBackToToc(viewEl);
+	layoutConspectusPageNumbers(viewEl);
+	if (opts.linkTocEntries === false) clearConspectusEntryLinks(viewEl);
 	labelCodeBlockLanguages(viewEl);
 	applyLightVars(printEl);
 	if (opts.cheatSheet && opts.cheatSheetDensity === "continuous") {

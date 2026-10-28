@@ -13,6 +13,8 @@ export interface StampOptions {
 	cover?: boolean;
 	/** Use Helvetica when that edge has no embedded font. */
 	standardFallback?: boolean;
+	/** {{section}} text for each page, in order. */
+	sections?: readonly string[];
 }
 
 export async function stampHeaderFooter(
@@ -57,7 +59,12 @@ export async function stampHeaderFooter(
 	for (let index = 0; index < pages.length; index++) {
 		const page = pages[index];
 		if (!page) continue;
-		const pageCtx: VariableContext = { ...ctx, page: index + 1, pages: total };
+		const pageCtx: VariableContext = {
+			...ctx,
+			page: index + 1,
+			pages: total,
+			section: options?.sections?.[index] ?? ctx.section ?? "",
+		};
 		const { height } = page.getSize();
 		if (settings.displayHeader && headerFont) {
 			if (options?.cover && !fonts.header) coverEdge(page, "header");

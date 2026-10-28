@@ -9,6 +9,8 @@ export interface VariableContext {
 	now?: Date;
 	/** Format used for a plain {{datetime}}. */
 	datetimeFormat?: string;
+	/** Heading in effect at the top of the page. Empty when that level has not started. */
+	section?: string;
 }
 
 type DateTokenKind = "date" | "time" | "datetime";
@@ -40,6 +42,7 @@ export function renderTemplate(template: string, ctx: VariableContext): string {
 		if (typeof val === "string" || typeof val === "number" || typeof val === "boolean") return String(val);
 		return "";
 	});
+	out = out.replace(/\{\{\s*section\s*\}\}/gi, ctx.section ?? "");
 	return out;
 }
 
@@ -89,4 +92,4 @@ export function formatTimestamp(format: string, date: Date = new Date()): string
 }
 
 export const VARIABLE_HINT =
-	"Variables: {{title}}, {{filename}}, {{page}}, {{pages}}, {{date}}, {{date:YYYYMMDD}}, {{date:YYYY-MM-DD}}, {{time}}, {{time:HH:MM}}, {{time:HH:MM:SS}}, {{time:HHMMSS}}, {{datetime}}, {{datetime:EPOCH}}, {{datetime:YYYYMMDD}}, {{datetime:YYYY-MM-DD}}, {{datetime:YYYYMMDD-HHMMSS}}, {{property:key}}";
+	"Variables: {{title}}, {{filename}}, {{section}}, {{page}}, {{pages}}, {{date}}, {{date:YYYYMMDD}}, {{date:YYYY-MM-DD}}, {{time}}, {{time:HH:MM}}, {{time:HH:MM:SS}}, {{time:HHMMSS}}, {{datetime}}, {{datetime:EPOCH}}, {{datetime:YYYYMMDD}}, {{datetime:YYYY-MM-DD}}, {{datetime:YYYYMMDD-HHMMSS}}, {{property:key}}";

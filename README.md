@@ -20,6 +20,8 @@ Open **Settings → Pagina**, or change the same options in the export window.
 - Border style and color for the header and footer
 - Font and text color. A blank font uses the vault’s text font, including a font installed for the vault.
 - PDF preview, printed backgrounds, the outline, metadata, and a timestamp on the file name
+- Tagged PDF: accessibility structure so a screen reader can follow headings and paragraphs. The image-based export cannot be fully tagged.
+- Separate switches for table-of-contents links and for heading text that jumps back to the contents
 - Whether to open the PDF after export
 
 Under **Backup**, **Export settings** and **Import settings** save or restore that configuration as `pagina-settings.json`.
@@ -30,6 +32,7 @@ Under **Backup**, **Export settings** and **Import settings** save or restore th
 | --- | --- |
 | `{{title}}` | Note name |
 | `{{filename}}` | File name |
+| `{{section}}` | Heading of the chosen level in effect at the top of the page. If that level is missing, the deepest heading still in effect is used, and a later heading replaces one of the same or deeper level. |
 | `{{page}}` | Current page |
 | `{{pages}}` | Page count |
 | `{{date}}`, `{{time}}`, `{{datetime}}` | Local date and time |

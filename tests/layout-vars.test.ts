@@ -6,7 +6,14 @@ import { contentBoxHasText } from "../src/blank-page";
 import { sanitizeCssText } from "../src/css-sanitize";
 import { computePageLayout } from "../src/paginate";
 import { effectiveLandscape, resolvePageSizeMm, validateLayout } from "../src/page-presets";
-import { applyHeaderLinePreference, CHEAT_SHEET_CSS, headerLineFits, PRINT_CSS } from "../src/print-styles";
+import {
+	applyHeaderLinePreference,
+	cheatSheetColumnWidth,
+	CHEAT_SHEET_CSS,
+	fitWideTables,
+	headerLineFits,
+	PRINT_CSS,
+} from "../src/print-styles";
 import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
 import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
@@ -304,6 +311,149 @@ describe("table header lines", () => {
 		for (const cell of table.querySelectorAll("th")) {
 			expect(cell.style.whiteSpace).toBe("normal");
 			expect(cell.style.minWidth).toBe("");
+		}
+	});
+});
+
+describe("cheat sheet table fit", () => {
+	const HOST_WIDTH = 800;
+	const MIN_CONTENT = 400;
+
+	function setClientWidth(el: HTMLElement, width: number): void {
+		Object.defineProperty(el, "clientWidth", { configurable: true, value: width });
+	}
+
+	function setMinContent(el: HTMLElement, width: number): void {
+		Object.defineProperty(el, "scrollWidth", { configurable: true, value: width });
+		Object.defineProperty(el, "offsetWidth", { configurable: true, value: width });
+	}
+
+	function captureZoom(): { value: () => number; restore: () => void } {
+		const values: number[] = [];
+		const original = CSSStyleDeclaration.prototype.setProperty;
+		CSSStyleDeclaration.prototype.setProperty = function (
+			property: string,
+			value: string | null,
+			priority?: string,
+		) {
+			if (property === "zoom" && value != null) values.push(Number(value));
+			return original.call(this, property, value, priority);
+		};
+		return {
+			value: () => values[values.length - 1] ?? Number.NaN,
+			restore: () => {
+				CSSStyleDeclaration.prototype.setProperty = original;
+			},
+		};
+	}
+
+	/** Single-line header probes are spans; give them a stable width in jsdom. */
+	function mockHeaderTextWidth(pxPerChar: number): () => void {
+		const original = Element.prototype.getBoundingClientRect;
+		Element.prototype.getBoundingClientRect = function (this: Element) {
+			if (this.tagName === "SPAN") {
+				const text = (this.textContent ?? "").trim();
+				return {
+					x: 0,
+					y: 0,
+					width: text.length * pxPerChar,
+					height: 10,
+					top: 0,
+					left: 0,
+					right: text.length * pxPerChar,
+					bottom: 10,
+					toJSON() {
+						return {};
+					},
+				} as DOMRect;
+			}
+			return original.call(this);
+		};
+		return () => {
+			Element.prototype.getBoundingClientRect = original;
+		};
+	}
+
+	function mountTable(cheatColumns: number | null): { root: HTMLElement; table: HTMLTableElement } {
+		const sheet = document.createElement("div");
+		if (cheatColumns != null) {
+			sheet.className = "pagina-cheat-sheet";
+			if (cheatColumns > 0) sheet.style.setProperty("--pagina-cheat-columns", String(cheatColumns));
+		}
+		const root = document.createElement("div");
+		sheet.appendChild(root);
+		document.body.appendChild(sheet);
+		setClientWidth(root, HOST_WIDTH);
+		const table = document.createElement("table");
+		table.innerHTML = "<thead><tr><th>Storage Tier</th><th>Architectural Unit</th></tr></thead>";
+		root.appendChild(table);
+		setMinContent(table, MIN_CONTENT);
+		return { root, table };
+	}
+
+	afterEach(() => {
+		document.body.innerHTML = "";
+	});
+
+	it("scales a table that fits the page but not one cheat-sheet column", () => {
+		const restore = mockHeaderTextWidth(20);
+		const zoom = captureZoom();
+		try {
+			const { root, table } = mountTable(4);
+			fitWideTables(root);
+			const wrap = root.querySelector(".pagina-table-fit");
+			expect(wrap).toBeInstanceOf(HTMLElement);
+			const fit = wrap as HTMLElement;
+			const column = cheatSheetColumnWidth(HOST_WIDTH, 4);
+			expect(column).toBeLessThan(MIN_CONTENT);
+			expect(MIN_CONTENT).toBeLessThan(HOST_WIDTH);
+			expect(zoom.value()).toBeCloseTo(column / MIN_CONTENT, 5);
+			expect(fit.style.width).toBe(`${MIN_CONTENT}px`);
+			expect(fit.style.maxWidth).toBe("none");
+			expect(table.classList.contains("pagina-table-natural")).toBe(true);
+			for (const cell of table.querySelectorAll("th")) {
+				expect(cell.style.whiteSpace).toBe("normal");
+				expect(cell.style.overflowWrap).toBe("break-word");
+				expect(cell.style.minWidth).toBe("");
+			}
+		} finally {
+			zoom.restore();
+			restore();
+		}
+	});
+
+	it("keeps a table that fits the page at full width outside a cheat sheet", () => {
+		const restore = mockHeaderTextWidth(20);
+		try {
+			const { root, table } = mountTable(null);
+			fitWideTables(root);
+			expect(root.querySelector(".pagina-table-fit")).toBeNull();
+			expect(table.classList.contains("pagina-table-full")).toBe(true);
+			for (const cell of table.querySelectorAll("th")) {
+				expect(cell.style.whiteSpace).toBe("nowrap");
+			}
+		} finally {
+			restore();
+		}
+	});
+
+	it("does not scale a cheat-sheet table that already fits one column", () => {
+		const { root, table } = mountTable(4);
+		setMinContent(table, 40);
+		fitWideTables(root);
+		expect(root.querySelector(".pagina-table-fit")).toBeNull();
+		expect(table.classList.contains("pagina-table-full")).toBe(true);
+	});
+
+	it("defaults to three columns when the cheat sheet does not set a count", () => {
+		const zoom = captureZoom();
+		try {
+			const { root } = mountTable(0);
+			fitWideTables(root);
+			expect(root.querySelector(".pagina-table-fit")).toBeInstanceOf(HTMLElement);
+			expect(zoom.value()).toBeCloseTo(cheatSheetColumnWidth(HOST_WIDTH, 3) / MIN_CONTENT, 5);
+		} finally {
+			zoom.restore();
 		}
 	});
 });
