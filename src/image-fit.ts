@@ -87,6 +87,8 @@ export function fitImageBox(requested: ImageBox, maxWidth: number, maxHeight: nu
 /**
  * Apply stamped sizes, then shrink anything taller or wider than the content box.
  * Width-only requests keep the image's aspect ratio. `WxH` keeps that exact ratio.
+ * A wiki embed stays full width; the fitted pixels go on its inner image so a
+ * centered image can sit in the column instead of a left-aligned box.
  */
 export async function fitStampedImages(root: ParentNode, maxWidth: number, maxHeight: number): Promise<void> {
 	if (!(maxWidth > 0) || !(maxHeight > 0)) return;
@@ -238,15 +240,22 @@ async function fitOne(el: HTMLElement, maxWidth: number, maxHeight: number): Pro
 function applyFittedSize(el: HTMLElement, img: HTMLImageElement | null, fitted: ImageBox, explicitBox: boolean): void {
 	const width = px(fitted.width);
 	const height = explicitBox ? px(fitted.height) : null;
-	el.style.width = width;
 	el.addClass("pagina-fit-bound");
+
+	if (img && img !== el) {
+		el.style.width = "100%";
+		el.style.height = "auto";
+		el.removeClass("pagina-fit-limit");
+		img.addClass("pagina-fit-img");
+		img.style.width = width;
+		img.style.height = height ?? "auto";
+		img.toggleClass("pagina-fit-fill", Boolean(height));
+		return;
+	}
+
+	el.style.width = width;
 	el.style.height = height ?? "auto";
 	el.toggleClass("pagina-fit-limit", Boolean(height));
-
-	if (!img || img === el) return;
-	img.addClass("pagina-fit-img");
-	img.style.height = height ? "100%" : "auto";
-	img.toggleClass("pagina-fit-fill", Boolean(height));
 }
 
 function px(value: number): string {

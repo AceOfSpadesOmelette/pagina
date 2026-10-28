@@ -85,8 +85,10 @@ describe("stamp and fit", () => {
 
 		const embed = document.querySelector(".image-embed");
 		if (!(embed instanceof HTMLElement)) throw new Error("missing embed");
-		expect(embed.style.width).toBe("180px");
+		expect(embed.style.width).toBe("100%");
 		expect(embed.style.height).toBe("auto");
+		expect(img.style.width).toBe("180px");
+		expect(img.style.height).toBe("auto");
 	});
 
 	it("refits an explicit box from the stamped request", async () => {
@@ -101,7 +103,9 @@ describe("stamp and fit", () => {
 
 		const embed = document.querySelector(".image-embed");
 		if (!(embed instanceof HTMLElement)) throw new Error("missing embed");
-		expect(embed.style.width).toBe("200px");
-		expect(embed.style.height).toBe("80px");
+		expect(embed.style.width).toBe("100%");
+		expect(embed.style.height).toBe("auto");
+		expect(img.style.width).toBe("200px");
+		expect(img.style.height).toBe("80px");
 	});
 });
