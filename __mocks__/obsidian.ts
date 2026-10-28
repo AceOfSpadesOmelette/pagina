@@ -116,7 +116,10 @@ if (typeof htmlProto.addClass !== "function") {
 		this.classList.toggle(cls, force);
 	};
 	htmlProto.setCssProps = function setCssProps(props: Record<string, string>) {
-		for (const [key, value] of Object.entries(props)) this.style.setProperty(key, value);
+		for (const [key, value] of Object.entries(props)) {
+			const prop = key.startsWith("--") ? key : key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+			this.style.setProperty(prop, value);
+		}
 	};
 }
 

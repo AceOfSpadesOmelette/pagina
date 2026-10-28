@@ -438,17 +438,19 @@ function measureNowrapText(cell: HTMLElement): number {
 	if (!host) return 0;
 	const cs = getComputedStyle(cell);
 	const probe = doc.createElement("span");
-	probe.style.position = "absolute";
-	probe.style.left = "0";
-	probe.style.top = "0";
-	probe.style.visibility = "hidden";
-	probe.style.whiteSpace = "nowrap";
-	probe.style.display = "inline-block";
-	probe.style.width = "max-content";
-	probe.style.maxWidth = "none";
-	probe.style.margin = "0";
-	probe.style.padding = "0";
-	probe.style.border = "0";
+	probe.setCssProps({
+		position: "absolute",
+		left: "0",
+		top: "0",
+		visibility: "hidden",
+		whiteSpace: "nowrap",
+		display: "inline-block",
+		width: "max-content",
+		maxWidth: "none",
+		margin: "0",
+		padding: "0",
+		border: "0",
+	});
 	probe.style.fontStyle = cs.fontStyle;
 	probe.style.fontVariant = cs.fontVariant;
 	probe.style.fontWeight = cs.fontWeight;
@@ -536,16 +538,20 @@ function headerEntries(table: HTMLTableElement, measuredWidths?: readonly number
 }
 
 function lockHeaderCell(cell: HTMLElement, minWidth: number): void {
-	cell.style.whiteSpace = "nowrap";
-	cell.style.overflowWrap = "normal";
-	cell.style.wordBreak = "normal";
+	cell.setCssProps({
+		whiteSpace: "nowrap",
+		overflowWrap: "normal",
+		wordBreak: "normal",
+	});
 	cell.style.minWidth = `${minWidth}px`;
 }
 
 function wrapHeaderCell(cell: HTMLElement): void {
-	cell.style.whiteSpace = "normal";
-	cell.style.overflowWrap = "break-word";
-	cell.style.wordBreak = "normal";
+	cell.setCssProps({
+		whiteSpace: "normal",
+		overflowWrap: "break-word",
+		wordBreak: "normal",
+	});
 	cell.style.removeProperty("min-width");
 }
 
@@ -650,7 +656,7 @@ export function fitWideTables(root: HTMLElement): void {
 		wrap.style.width = `${needed}px`;
 		// The column is narrower than this table's min-content. max-width: 100%
 		// would clamp the pre-zoom width and then zoom would shrink it again.
-		if (columns != null) wrap.style.maxWidth = "none";
+		if (columns != null) wrap.setCssProps({ maxWidth: "none" });
 		wrap.style.setProperty("zoom", String(scale));
 		table.parentNode?.insertBefore(wrap, table);
 		wrap.appendChild(table);

@@ -243,8 +243,7 @@ function applyFittedSize(el: HTMLElement, img: HTMLImageElement | null, fitted: 
 	el.addClass("pagina-fit-bound");
 
 	if (img && img !== el) {
-		el.style.width = "100%";
-		el.style.height = "auto";
+		el.setCssProps({ width: "100%", height: "auto" });
 		el.removeClass("pagina-fit-limit");
 		img.addClass("pagina-fit-img");
 		img.style.width = width;
