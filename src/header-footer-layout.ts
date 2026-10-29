@@ -26,12 +26,13 @@ export function footerBaselineFromBottomMm(): number {
 /** Space between the border and the note body. */
 export const CLEARANCE_MM = 1.0;
 
-export function bandHeightMm(borderStyle: string | undefined): number {
-	return LINE_MM + TEXT_BORDER_GAP_MM + borderExtentMm(borderStyle);
+export function bandHeightMm(borderStyle: string | undefined, lines = 1): number {
+	const count = Math.max(1, lines);
+	return LINE_MM * count + TEXT_BORDER_GAP_MM + borderExtentMm(borderStyle);
 }
 
-export function requiredMarginMm(borderStyle: string | undefined): number {
-	return FRAME_INSET_MM + bandHeightMm(borderStyle) + CLEARANCE_MM;
+export function requiredMarginMm(borderStyle: string | undefined, lines = 1): number {
+	return FRAME_INSET_MM + bandHeightMm(borderStyle, lines) + CLEARANCE_MM;
 }
 
 /**
@@ -40,12 +41,12 @@ export function requiredMarginMm(borderStyle: string | undefined): number {
  */
 export function effectiveVerticalMargins(
 	user: { top: number; bottom: number },
-	header: { display: boolean; borderStyle?: string },
-	footer: { display: boolean; borderStyle?: string },
+	header: { display: boolean; borderStyle?: string; lines?: number },
+	footer: { display: boolean; borderStyle?: string; lines?: number },
 ): { top: number; bottom: number } {
 	return {
-		top: header.display ? Math.max(user.top, requiredMarginMm(header.borderStyle)) : user.top,
-		bottom: footer.display ? Math.max(user.bottom, requiredMarginMm(footer.borderStyle)) : user.bottom,
+		top: header.display ? Math.max(user.top, requiredMarginMm(header.borderStyle, header.lines)) : user.top,
+		bottom: footer.display ? Math.max(user.bottom, requiredMarginMm(footer.borderStyle, footer.lines)) : user.bottom,
 	};
 }
 

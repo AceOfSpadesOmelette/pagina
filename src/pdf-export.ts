@@ -54,10 +54,12 @@ import {
 	SECTION_TOP_SLACK_PX,
 	sectionHeadingsFromOffsets,
 	sectionHeadingsInContentBox,
+	sectionTitleCandidates,
 	sectionTitlesForDocument,
 	sectionTitleForPage,
 	slotsUseSection,
 } from "./section-title";
+import { RASTER_SLOT_FONT_PT, slotColumnWidth, slotLineCount, STAMP_SLOT_FONT_PT, widestText, widthOfFont, wrapSlotText } from "./slot-wrap";
 
 export interface BuildPdfResult {
 	bytes: Uint8Array;
@@ -130,7 +132,6 @@ async function buildPdfBytesElectron(
 	settings: PaginaSettings,
 	existingRender?: RenderedNote,
 ): Promise<BuildPdfResult> {
-	const layout = computePageLayout(settings);
 	const rendered =
 		existingRender ??
 		(await renderNoteForExport({
@@ -167,9 +168,38 @@ async function buildPdfBytesElectron(
 		if (footerLoaded.error && footerLoaded.error !== headerLoaded.error) new Notice(footerLoaded.error);
 		const headerUsesSection = settings.displayHeader && slotsUseSection(settings.header);
 		const footerUsesSection = settings.displayFooter && slotsUseSection(settings.footer);
+		const columnPt = pt(computePageLayout(settings).contentWidthMm);
+		const level = Number(settings.sectionHeadingLevel) || 1;
+		const headingSources = readSectionHeadings(rendered.contentEl);
+		const headerLines = await runningEdgeLines(
+			settings.displayHeader,
+			settings.header,
+			headerFace,
+			ctx,
+			headingSources,
+			level,
+			slotColumnWidth(columnPt),
+			STAMP_SLOT_FONT_PT,
+		);
+		const footerLines = await runningEdgeLines(
+			settings.displayFooter,
+			settings.footer,
+			footerFace,
+			ctx,
+			headingSources,
+			level,
+			slotColumnWidth(columnPt),
+			STAMP_SLOT_FONT_PT,
+		);
+		const bands = { headerLines, footerLines };
+		const bandWarning = layoutWarning(settings, bands);
+		if (bandWarning) throw new Error(bandWarning);
+		const layout = computePageLayout(settings, bands);
 		const options = makeElectronPrintOptions(settings, ctx, rendered.printEl, {
 			headerOmitText: headerFace != null || headerUsesSection,
 			footerOmitText: footerFace != null || footerUsesSection,
+			headerLines,
+			footerLines,
 		});
 		await applyExportContentBox(rendered, layout);
 		let raw = await printElementToPdf(
@@ -211,7 +241,7 @@ async function buildPdfBytesElectron(
 				printable,
 				rendered.contentEl,
 				Number(settings.sectionHeadingLevel) || 1,
-				resolvePrintMarginsMm(settings).top,
+				layout.marginTopMm,
 			);
 		}
 		const stamped = await stampHeaderFooter(
@@ -232,6 +262,27 @@ async function buildPdfBytesElectron(
 	} finally {
 		if (shouldCleanup) rendered.cleanup();
 	}
+}
+
+async function runningEdgeLines(
+	display: boolean,
+	slots: PaginaSettings["header"],
+	fontBytes: Uint8Array | null,
+	ctx: VariableContext,
+	headings: readonly { level: number; title: string }[],
+	level: number,
+	columnPt: number,
+	fontSize: number,
+): Promise<number> {
+	if (!display) return 1;
+	const widthOf = await widthOfFont(fontBytes, fontSize);
+	const section = widestText(sectionTitleCandidates(headings, level), widthOf);
+	const slotCtx: VariableContext = { ...ctx, page: 999, pages: 999, section, datetimeFormat: slots.datetimeFormat };
+	return slotLineCount(
+		[slots.left, slots.center, slots.right].map((template) => renderTemplate(template, slotCtx)),
+		widthOf,
+		columnPt,
+	);
 }
 
 async function sectionTitlesFromPrintedPdf(
@@ -274,7 +325,7 @@ export async function buildPdfBytesRaster(
 	settings: PaginaSettings,
 	onProgress?: PdfProgress,
 ): Promise<BuildPdfResult> {
-	const layout = computePageLayout(settings);
+	const preliminary = computePageLayout(settings);
 	onProgress?.("Pagina: preparing PDF…");
 	// HTML preview is not raster-ready (no inlined images / mermaid snapshots).
 	const rendered = await renderNoteForExport({
@@ -283,11 +334,48 @@ export async function buildPdfBytesRaster(
 		...renderFlagsFromSettings(settings),
 		forRaster: true,
 		bakeMermaid: false,
-		contentWidthPx: layout.contentWidthPx,
+		contentWidthPx: preliminary.contentWidthPx,
 	});
 
 	try {
 		rendered.printEl.addClass("pagina-print-shown");
+		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+		const measureCtx: VariableContext = {
+			title: file.basename,
+			filename: file.name,
+			page: 1,
+			pages: 1,
+			frontmatter,
+			now: new Date(),
+		};
+		const columnPt = slotColumnWidth(pt(preliminary.contentWidthMm));
+		const level = Number(settings.sectionHeadingLevel) || 1;
+		const headingSources = readSectionHeadings(rendered.contentEl);
+		const bands = {
+			headerLines: await runningEdgeLines(
+				settings.displayHeader,
+				settings.header,
+				null,
+				measureCtx,
+				headingSources,
+				level,
+				columnPt,
+				RASTER_SLOT_FONT_PT,
+			),
+			footerLines: await runningEdgeLines(
+				settings.displayFooter,
+				settings.footer,
+				null,
+				measureCtx,
+				headingSources,
+				level,
+				columnPt,
+				RASTER_SLOT_FONT_PT,
+			),
+		};
+		const bandWarning = layoutWarning(settings, bands);
+		if (bandWarning) throw new Error(bandWarning);
+		const layout = computePageLayout(settings, bands);
 		await applyExportContentBox(rendered, layout);
 		const contentEl = rendered.contentEl;
 		void contentEl.offsetHeight;
@@ -314,7 +402,6 @@ export async function buildPdfBytesRaster(
 		const pageWidthPt = pt(layout.pageWidthMm);
 		const pageHeightPt = pt(layout.pageHeightMm);
 
-		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const now = new Date();
 		const prevOverflow = rendered.printEl.style.overflow;
 		const prevHostHeight = rendered.printEl.style.height;
@@ -789,7 +876,20 @@ function drawHeaderFooter(
 	if (settings.displayHeader) {
 		const borderMm = borderExtentMm(settings.header.borderStyle);
 		const textY = headerBaselineFromTopMm();
-		drawSlots(page, pageHeightPt, font, ink, settings.header, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
+		drawSlots(
+			page,
+			pageHeightPt,
+			font,
+			ink,
+			settings.header,
+			contentLeft,
+			centerX,
+			contentRight,
+			textY,
+			contentWidth,
+			ctx,
+			"down",
+		);
 		if (borderMm > 0) {
 			drawBorderBand(
 				page,
@@ -797,7 +897,7 @@ function drawHeaderFooter(
 				settings.header.borderStyle,
 				settings.header.borderColor,
 				contentLeft,
-				FRAME_INSET_MM + LINE_MM + TEXT_BORDER_GAP_MM,
+				FRAME_INSET_MM + LINE_MM * layout.headerLines + TEXT_BORDER_GAP_MM,
 				contentWidth,
 			);
 		}
@@ -812,11 +912,24 @@ function drawHeaderFooter(
 				settings.footer.borderStyle,
 				settings.footer.borderColor,
 				contentLeft,
-				layout.pageHeightMm - FRAME_INSET_MM - LINE_MM - TEXT_BORDER_GAP_MM - borderMm,
+				layout.pageHeightMm - FRAME_INSET_MM - LINE_MM * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
 				contentWidth,
 			);
 		}
-		drawSlots(page, pageHeightPt, font, ink, settings.footer, contentLeft, centerX, contentRight, textY, contentWidth, ctx);
+		drawSlots(
+			page,
+			pageHeightPt,
+			font,
+			ink,
+			settings.footer,
+			contentLeft,
+			centerX,
+			contentRight,
+			textY,
+			contentWidth,
+			ctx,
+			"up",
+		);
 	}
 }
 
@@ -832,12 +945,13 @@ function drawSlots(
 	y: number,
 	maxWidth: number,
 	ctx: VariableContext,
+	direction: "down" | "up",
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
-	const colW = maxWidth / 3;
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left");
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center");
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right");
+	const colW = slotColumnWidth(maxWidth);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left", direction);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center", direction);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right", direction);
 }
 
 function drawSlot(
@@ -850,33 +964,45 @@ function drawSlot(
 	yMm: number,
 	maxWidthMm: number,
 	align: "left" | "center" | "right",
+	direction: "down" | "up",
 ): void {
 	const printable = winAnsi(text);
 	if (!printable) return;
-	const size = 9;
-	let width = 0;
-	try {
-		width = font.widthOfTextAtSize(printable, size);
-	} catch {
-		return;
-	}
-	const used = Math.min(width, pt(maxWidthMm));
-	let x = pt(anchorMm);
-	if (align === "center") x = pt(anchorMm) - used / 2;
-	if (align === "right") x = pt(anchorMm) - used;
-	try {
-		page.drawText(printable, {
-			x,
-			y: pageHeightPt - pt(yMm),
-			size,
-			font,
-			color: ink,
-			maxWidth: pt(maxWidthMm),
-			lineHeight: size * 1.2,
-		});
-	} catch {
-		// The raster fallback uses Helvetica. Skip a slot it cannot encode.
-	}
+	const size = RASTER_SLOT_FONT_PT;
+	const lines = wrapSlotText(
+		printable,
+		(sample) => {
+			try {
+				return font.widthOfTextAtSize(sample, size);
+			} catch {
+				return null;
+			}
+		},
+		pt(maxWidthMm),
+	);
+	lines.forEach((line, index) => {
+		let width = 0;
+		try {
+			width = font.widthOfTextAtSize(line, size);
+		} catch {
+			return;
+		}
+		let x = pt(anchorMm);
+		if (align === "center") x = pt(anchorMm) - width / 2;
+		if (align === "right") x = pt(anchorMm) - width;
+		const lineY = direction === "down" ? yMm + index * LINE_MM : yMm - index * LINE_MM;
+		try {
+			page.drawText(line, {
+				x,
+				y: pageHeightPt - pt(lineY),
+				size,
+				font,
+				color: ink,
+			});
+		} catch {
+			// The raster fallback uses Helvetica. Skip a line it cannot encode.
+		}
+	});
 }
 
 function winAnsi(text: string): string {

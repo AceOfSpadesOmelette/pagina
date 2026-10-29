@@ -622,16 +622,46 @@ export function wireHeadingBackToToc(root: ParentNode): void {
 		marker.dataset.flag = TOC_ANCHOR_FLAG;
 		toc.insertBefore(marker, toc.firstChild);
 	}
+	placeTocBackMarkers(toc);
 
 	root.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6").forEach((heading) => {
 		if (heading.classList.contains("__title__")) return;
 		if (heading.classList.contains("conspectus-toc-title")) return;
 		if (heading.closest(".conspectus-toc")) return;
-		wrapHeadingTextForToc(heading);
+		wrapHeadingTextForToc(heading, root);
 	});
 }
 
-function wrapHeadingTextForToc(heading: HTMLElement): void {
+/** Invisible marker on each contents row so a heading can return to that line. */
+function placeTocBackMarkers(toc: HTMLElement): void {
+	toc.querySelectorAll<HTMLAnchorElement>("a[data-heading]").forEach((entry) => {
+		const flag = /^an:\/\/(.+)$/.exec(entry.getAttribute("href") ?? "")?.[1];
+		if (!flag) return;
+		const li = entry.closest("li");
+		if (!li || li.querySelector(`a.md-print-anchor[data-flag="tocback-${flag}"]`)) return;
+		const marker = document.createElement("a");
+		marker.className = "md-print-anchor";
+		marker.dataset.flag = `tocback-${flag}`;
+		marker.setAttribute("href", `af://tocback-${flag}`);
+		li.insertBefore(marker, li.firstChild);
+	});
+}
+
+function headingBackFlag(root: ParentNode, heading: HTMLElement): string {
+	const printAnchor = heading.querySelector<HTMLAnchorElement>("a.md-print-anchor");
+	const flag =
+		printAnchor?.dataset.flag ||
+		/^af:\/\/(.+)$/.exec(printAnchor?.getAttribute("href") ?? "")?.[1];
+	if (!flag) return TOC_ANCHOR_FLAG;
+	const back = `tocback-${flag}`;
+	const markers = root.querySelectorAll<HTMLAnchorElement>("a.md-print-anchor");
+	for (const marker of markers) {
+		if (marker.dataset.flag === back) return back;
+	}
+	return TOC_ANCHOR_FLAG;
+}
+
+function wrapHeadingTextForToc(heading: HTMLElement, root: ParentNode): void {
 	const movable: ChildNode[] = [];
 	for (const child of Array.from(heading.childNodes)) {
 		if (child instanceof HTMLAnchorElement) continue;
@@ -641,7 +671,7 @@ function wrapHeadingTextForToc(heading: HTMLElement): void {
 
 	const link = document.createElement("a");
 	link.className = "pagina-heading-toc-link";
-	link.setAttribute("href", `an://${TOC_ANCHOR_FLAG}`);
+	link.setAttribute("href", `an://${headingBackFlag(root, heading)}`);
 	heading.insertBefore(link, movable[0]!);
 	for (const node of movable) link.appendChild(node);
 }

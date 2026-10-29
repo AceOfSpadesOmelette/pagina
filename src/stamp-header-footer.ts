@@ -2,11 +2,12 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, LINE_MM, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
 import { resolvePrintMarginsMm } from "./page-presets";
+import { slotColumnWidth, slotLeftEdges, STAMP_SLOT_FONT_PT, wrapSlotText } from "./slot-wrap";
 import type { HeaderFooterSlots, PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
 
 /** 9px at 96dpi, matching the header and footer line. */
-const FONT_PT = 6.75;
+const FONT_PT = STAMP_SLOT_FONT_PT;
 
 export interface StampOptions {
 	/** Paint out Chromium's header or footer text before drawing a replacement. */
@@ -75,11 +76,20 @@ export async function stampHeaderFooter(
 				pageCtx,
 				margins,
 				height - mm(headerBaselineFromTopMm()),
+				"header",
 			);
 		}
 		if (settings.displayFooter && footerFont) {
 			if (options?.cover && !fonts.footer) coverEdge(page, "footer");
-			drawEdge(page, footerFont, settings.footer, pageCtx, margins, mm(footerBaselineFromBottomMm()));
+			drawEdge(
+				page,
+				footerFont,
+				settings.footer,
+				pageCtx,
+				margins,
+				mm(footerBaselineFromBottomMm()),
+				"footer",
+			);
 		}
 	}
 	return doc.save();
@@ -103,60 +113,42 @@ function drawEdge(
 	ctx: VariableContext,
 	margins: { left: number; right: number },
 	baseline: number,
+	edge: "header" | "footer",
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
 	const width = page.getWidth();
 	const left = mm(margins.left);
 	const content = Math.max(0, width - mm(margins.left) - mm(margins.right));
-	const col = content / 3;
+	const col = slotColumnWidth(content);
+	const [leftSlot, centerSlot, rightSlot] = slotLeftEdges(left, content);
 	const color = parseColor(slots.textColor || "#555555");
-	const draw = (template: string, slotLeft: number, align: "left" | "center" | "right") => {
-		const text = textThatFits(font, renderTemplate(template, slotCtx), FONT_PT, col);
-		if (!text) return;
-		const textWidth = font.widthOfTextAtSize(text, FONT_PT);
-		let x = slotLeft;
-		if (align === "center") x = slotLeft + (col - textWidth) / 2;
-		if (align === "right") x = slotLeft + col - textWidth;
-		page.drawText(text, { x, y: baseline, size: FONT_PT, font, color });
-	};
-	draw(slots.left, left, "left");
-	draw(slots.center, left + col, "center");
-	draw(slots.right, left + col * 2, "right");
-}
-
-function textThatFits(font: PDFFont, text: string, size: number, maxWidth: number): string {
-	if (!text || maxWidth <= 0) return "";
-	let kept = "";
-	for (const ch of Array.from(text)) {
-		const next = kept + ch;
-		if (!canMeasure(font, next, size)) continue;
-		kept = next;
-	}
-	if (!kept) return "";
-	if (measure(font, kept, size) <= maxWidth) return kept;
-	const ellipsis = canMeasure(font, "…", size) ? "…" : "";
-	const chars = Array.from(kept);
-	while (chars.length > 0) {
-		chars.pop();
-		const candidate = chars.join("") + ellipsis;
-		if (candidate && canMeasure(font, candidate, size) && measure(font, candidate, size) <= maxWidth) {
-			return candidate;
+	const lineAdvance = mm(LINE_MM);
+	const widthOf = (sample: string): number | null => {
+		try {
+			return font.widthOfTextAtSize(sample, FONT_PT);
+		} catch {
+			return null;
 		}
-	}
-	return "";
-}
-
-function canMeasure(font: PDFFont, text: string, size: number): boolean {
-	try {
-		font.widthOfTextAtSize(text, size);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function measure(font: PDFFont, text: string, size: number): number {
-	return font.widthOfTextAtSize(text, size);
+	};
+	const draw = (template: string, slotLeft: number, align: "left" | "center" | "right") => {
+		const lines = wrapSlotText(renderTemplate(template, slotCtx), widthOf, col);
+		lines.forEach((line, index) => {
+			let textWidth = 0;
+			try {
+				textWidth = font.widthOfTextAtSize(line, FONT_PT);
+			} catch {
+				return;
+			}
+			let x = slotLeft;
+			if (align === "center") x = slotLeft + (col - textWidth) / 2;
+			if (align === "right") x = slotLeft + col - textWidth;
+			const y = edge === "header" ? baseline - index * lineAdvance : baseline + index * lineAdvance;
+			page.drawText(line, { x, y, size: FONT_PT, font, color });
+		});
+	};
+	draw(slots.left, leftSlot, "left");
+	draw(slots.center, centerSlot, "center");
+	draw(slots.right, rightSlot, "right");
 }
 
 function parseColor(hex: string): ReturnType<typeof rgb> {

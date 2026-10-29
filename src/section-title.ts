@@ -81,6 +81,17 @@ export function slotsUseSection(slots: { left: string; center: string; right: st
 	return [slots.left, slots.center, slots.right].some((slot) => templateUsesSection(slot));
 }
 
+/** Headings that can appear as {{section}}. Matches the level rule used on each page. */
+export function sectionTitleCandidates(
+	headings: readonly { level: number; title: string }[],
+	level: number,
+): string[] {
+	const exact = headings.some((heading) => heading.level === level);
+	return headings
+		.filter((heading) => heading.title && (exact ? heading.level === level : heading.level <= level))
+		.map((heading) => heading.title);
+}
+
 /** Document headings only. Skips the file-name title and Conspectus. */
 export function readSectionHeadings(root: ParentNode): SectionHeadingSource[] {
 	const out: SectionHeadingSource[] = [];

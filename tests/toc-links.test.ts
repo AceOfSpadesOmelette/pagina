@@ -31,6 +31,29 @@ describe("conspectus PDF links", () => {
 		expect(tocLink?.getAttribute("href")).toBe(`an://${flag}`);
 	});
 
+	it("links a heading back to its own contents row", () => {
+		const root = document.createElement("div");
+		root.innerHTML = `
+			<div class="conspectus-toc">
+				<ul>
+					<li><a class="internal-link" data-heading="Mount the ISO" href="#Mount the ISO">Mount the ISO</a></li>
+				</ul>
+			</div>
+			<h2 data-heading="Mount the ISO">Mount the ISO</h2>
+			<h2 data-heading="Not listed">Not listed</h2>
+		`;
+		addHeadingAnchors(root);
+		wireConspectusTocLinks(root);
+		wireHeadingBackToToc(root);
+
+		const flag = root.querySelector("h2 a.md-print-anchor")?.getAttribute("data-flag");
+		const row = root.querySelector(".conspectus-toc li");
+		expect(row?.querySelector("a.md-print-anchor")?.getAttribute("href")).toBe(`af://tocback-${flag}`);
+		expect(root.querySelector("h2 a.pagina-heading-toc-link")?.getAttribute("href")).toBe(`an://tocback-${flag}`);
+		const unlisted = root.querySelectorAll("h2")[1];
+		expect(unlisted?.querySelector("a.pagina-heading-toc-link")?.getAttribute("href")).toBe("an://conspectus-toc");
+	});
+
 	it("links heading text back to the first printed table of contents", () => {
 		const root = document.createElement("div");
 		root.innerHTML = `

@@ -127,8 +127,8 @@ export interface LayoutInput {
 	customMarginRightMm: number;
 	displayHeader?: boolean;
 	displayFooter?: boolean;
-	header?: { borderStyle?: string };
-	footer?: { borderStyle?: string };
+	header?: { borderStyle?: string; lines?: number };
+	footer?: { borderStyle?: string; lines?: number };
 }
 
 /**
@@ -149,8 +149,8 @@ export function resolvePrintMarginsMm(input: LayoutInput): {
 	});
 	const vertical = effectiveVerticalMargins(
 		margins,
-		{ display: Boolean(input.displayHeader), borderStyle: input.header?.borderStyle },
-		{ display: Boolean(input.displayFooter), borderStyle: input.footer?.borderStyle },
+		{ display: Boolean(input.displayHeader), borderStyle: input.header?.borderStyle, lines: input.header?.lines },
+		{ display: Boolean(input.displayFooter), borderStyle: input.footer?.borderStyle, lines: input.footer?.lines },
 	);
 	return {
 		top: vertical.top,
@@ -160,15 +160,30 @@ export function resolvePrintMarginsMm(input: LayoutInput): {
 	};
 }
 
+function withBandLines(
+	input: LayoutInput,
+	bands?: { headerLines?: number; footerLines?: number },
+): LayoutInput {
+	if (!bands) return input;
+	return {
+		...input,
+		header: { borderStyle: input.header?.borderStyle, lines: bands.headerLines },
+		footer: { borderStyle: input.footer?.borderStyle, lines: bands.footerLines },
+	};
+}
+
 /** Layout check using the page orientation Chromium will actually print. */
-export function layoutWarning(input: LayoutInput): string | null {
+export function layoutWarning(
+	input: LayoutInput,
+	bands?: { headerLines?: number; footerLines?: number },
+): string | null {
 	const page = resolvePageSizeMm(
 		input.pageSize,
 		input.customPageWidthMm,
 		input.customPageHeightMm,
 		effectiveLandscape(input),
 	);
-	return validateLayout(page, resolvePrintMarginsMm(input), input.pageSize);
+	return validateLayout(page, resolvePrintMarginsMm(withBandLines(input, bands)), input.pageSize);
 }
 
 export function resolveMarginsMm(

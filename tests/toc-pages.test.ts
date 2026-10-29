@@ -78,7 +78,9 @@ describe("link switches", () => {
 		clearConspectusEntryLinks(root);
 
 		expect(root.querySelector(".conspectus-toc a[data-heading]")?.getAttribute("href")).toBeNull();
-		expect(root.querySelector("h1 > a.pagina-heading-toc-link")?.getAttribute("href")).toBe("an://conspectus-toc");
+		const flag = root.querySelector("h1 a.md-print-anchor")?.getAttribute("data-flag");
+		expect(root.querySelector("h1 > a.pagina-heading-toc-link")?.getAttribute("href")).toBe(`an://tocback-${flag}`);
+		expect(root.querySelector(`a[data-flag="tocback-${flag}"]`)).not.toBeNull();
 		expect(root.querySelector("a[href^='af://tocpage-']")).not.toBeNull();
 	});
 

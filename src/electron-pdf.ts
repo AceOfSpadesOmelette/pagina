@@ -195,6 +195,7 @@ function headerFooterHtml(
 	edge: "header" | "footer",
 	noteFont: string,
 	omitText: boolean,
+	lines: number,
 ): string {
 	const left = omitText ? "" : chromiumSlot(slots.left, ctx, slots.datetimeFormat);
 	const center = omitText ? "" : chromiumSlot(slots.center, ctx, slots.datetimeFormat);
@@ -203,14 +204,16 @@ function headerFooterHtml(
 	const fontFamily = cssFontFamily(slots.fontFamily, noteFont);
 	const rule = borderSvg(slots.borderStyle, slots.borderColor);
 	const linePx = mmToCssPx(LINE_MM);
+	const rowPx = mmToCssPx(LINE_MM * Math.max(1, lines));
 	const emPx = mmToCssPx(EM_MM);
 	const gapPx = mmToCssPx(TEXT_BORDER_GAP_MM);
 	const justify = edge === "header" ? "flex-start" : "flex-end";
+	const alignItems = edge === "header" ? "flex-start" : "flex-end";
 	const ruleHtml = rule ? `<div style="width:100%;line-height:0;">${rule}</div>` : "";
 	const gapHtml = rule ? `<div style="height:${gapPx}px;line-height:0;font-size:0;"></div>` : "";
 	const slot = (align: string, text: string) =>
-		`<div style="flex:1;min-width:0;height:${linePx}px;line-height:${linePx}px;font-size:${emPx}px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:${align};">${text}</div>`;
-	const row = `<div style="width:100%;height:${linePx}px;display:flex;align-items:stretch;overflow:hidden;">
+		`<div style="flex:1;min-width:0;height:${rowPx}px;line-height:${linePx}px;font-size:${emPx}px;overflow:hidden;white-space:normal;word-break:break-word;text-align:${align};">${text}</div>`;
+	const row = `<div style="width:100%;height:${rowPx}px;display:flex;align-items:${alignItems};overflow:hidden;">
 ${slot("left", left)}${slot("center", center)}${slot("right", right)}
 </div>`;
 	if (omitText && !rule) return "<span></span>";
@@ -222,6 +225,9 @@ export interface ElectronPrintExtras {
 	/** Vault font is stamped on afterwards, so the template keeps the border spacer only. */
 	headerOmitText?: boolean;
 	footerOmitText?: boolean;
+	/** Lines reserved so a wrapped slot stays above the border. */
+	headerLines?: number;
+	footerLines?: number;
 }
 
 export function makeElectronPrintOptions(
@@ -236,8 +242,13 @@ export function makeElectronPrintOptions(
 		settings.customPageHeightMm,
 		false,
 	);
-	const margins = resolvePrintMarginsMm(settings);
-	const layoutMessage = layoutWarning(settings);
+	const banded = {
+		...settings,
+		header: { borderStyle: settings.header.borderStyle, lines: extras?.headerLines },
+		footer: { borderStyle: settings.footer.borderStyle, lines: extras?.footerLines },
+	};
+	const margins = resolvePrintMarginsMm(banded);
+	const layoutMessage = layoutWarning(banded);
 	if (layoutMessage) {
 		throw new Error(layoutMessage);
 	}
@@ -271,6 +282,7 @@ export function makeElectronPrintOptions(
 					"header",
 					noteFont,
 					Boolean(extras?.headerOmitText),
+					Math.max(1, extras?.headerLines ?? 1),
 				)
 			: "<span></span>",
 		footerTemplate: settings.displayFooter
@@ -282,6 +294,7 @@ export function makeElectronPrintOptions(
 					"footer",
 					noteFont,
 					Boolean(extras?.footerOmitText),
+					Math.max(1, extras?.footerLines ?? 1),
 				)
 			: "<span></span>",
 	};

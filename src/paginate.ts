@@ -27,22 +27,34 @@ export interface PageLayout {
 	contentHeightMm: number;
 	headerBandMm: number;
 	footerBandMm: number;
+	/** Lines reserved in the header band. Short pages still use the first line only. */
+	headerLines: number;
+	footerLines: number;
 	scale: number;
 	contentWidthPx: number;
 	contentHeightPx: number;
 }
 
-export function computePageLayout(settings: PaginaSettings): PageLayout {
+export function computePageLayout(
+	settings: PaginaSettings,
+	bands?: { headerLines?: number; footerLines?: number },
+): PageLayout {
 	const page = resolvePageSizeMm(
 		settings.pageSize,
 		settings.customPageWidthMm,
 		settings.customPageHeightMm,
 		effectiveLandscape(settings),
 	);
-	const margins = resolvePrintMarginsMm(settings);
+	const headerLines = Math.max(1, bands?.headerLines ?? 1);
+	const footerLines = Math.max(1, bands?.footerLines ?? 1);
+	const margins = resolvePrintMarginsMm({
+		...settings,
+		header: { borderStyle: settings.header.borderStyle, lines: headerLines },
+		footer: { borderStyle: settings.footer.borderStyle, lines: footerLines },
+	});
 
-	const headerBandMm = settings.displayHeader ? bandHeightMm(settings.header.borderStyle) : 0;
-	const footerBandMm = settings.displayFooter ? bandHeightMm(settings.footer.borderStyle) : 0;
+	const headerBandMm = settings.displayHeader ? bandHeightMm(settings.header.borderStyle, headerLines) : 0;
+	const footerBandMm = settings.displayFooter ? bandHeightMm(settings.footer.borderStyle, footerLines) : 0;
 
 	const contentWidthMm = Math.max(1, page.width - margins.left - margins.right);
 	const contentHeightMm = Math.max(1, page.height - margins.top - margins.bottom);
@@ -64,6 +76,8 @@ export function computePageLayout(settings: PaginaSettings): PageLayout {
 		contentHeightMm,
 		headerBandMm,
 		footerBandMm,
+		headerLines,
+		footerLines,
 		scale: layoutScale,
 		contentWidthPx,
 		contentHeightPx,

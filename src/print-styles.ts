@@ -249,6 +249,16 @@ ${LIGHT_PRINT_SURFACE_CSS}
   color: inherit;
   text-decoration: none;
 }
+.print.pagina-print .conspectus-toc > ul.conspectus-toc-list {
+  margin: 0;
+  margin-inline-start: 0;
+  padding: 0;
+  padding-inline-start: 0;
+  list-style: none;
+}
+.print.pagina-print .conspectus-toc a.internal-link {
+  color: var(--link-color);
+}
 .print.pagina-print .conspectus-toc-entry {
   display: flex;
   align-items: baseline;
@@ -330,6 +340,16 @@ ${LIGHT_PRINT_SURFACE_CSS}
   .print.pagina-print h6 > a.pagina-heading-toc-link {
     color: inherit;
     text-decoration: none;
+  }
+  .print.pagina-print .conspectus-toc > ul.conspectus-toc-list {
+    margin: 0;
+    margin-inline-start: 0;
+    padding: 0;
+    padding-inline-start: 0;
+    list-style: none;
+  }
+  .print.pagina-print .conspectus-toc a.internal-link {
+    color: var(--link-color);
   }
   .print.pagina-print .conspectus-toc-entry {
     display: flex;
