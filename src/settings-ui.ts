@@ -85,7 +85,6 @@ export function renderPaginaSettings(
 				s
 					.setLimits(6, 14, 1)
 					.setValue(settings.cheatSheetFontSizePt)
-					.setDynamicTooltip()
 					.onChange((v) => {
 						settings.cheatSheetFontSizePt = v;
 						notify();

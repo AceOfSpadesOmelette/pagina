@@ -96,7 +96,7 @@ export function sectionTitleCandidates(
 export function readSectionHeadings(root: ParentNode): SectionHeadingSource[] {
 	const out: SectionHeadingSource[] = [];
 	root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((node) => {
-		if (!(node instanceof HTMLElement)) return;
+		if (!node.instanceOf(HTMLElement)) return;
 		if (node.classList.contains("__title__") || node.classList.contains("conspectus-toc-title")) return;
 		if (node.closest(".conspectus-toc")) return;
 		const level = Number(node.tagName.slice(1));
@@ -154,7 +154,7 @@ export function sectionHeadingsInContentBox(
 	const rootTop = root.getBoundingClientRect().top;
 	const out: Array<{ level: number; title: string; offsetTop: number }> = [];
 	root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((node) => {
-		if (!(node instanceof HTMLElement)) return;
+		if (!node.instanceOf(HTMLElement)) return;
 		if (node.classList.contains("__title__") || node.classList.contains("conspectus-toc-title")) return;
 		if (node.closest(".conspectus-toc")) return;
 		const level = Number(node.tagName.slice(1));

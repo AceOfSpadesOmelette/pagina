@@ -1,7 +1,7 @@
 import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, requestUrl, TFile } from "obsidian";
 import type { PaginaSettings } from "./types";
 import { clearConspectusEntryLinks, layoutConspectusPageNumbers } from "./toc-layout";
-import { applyCheatSheetClasses, applyContinuousText } from "./cheat-sheet";
+import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "./cheat-sheet";
 import { sanitizeCssText } from "./css-sanitize";
 import { stampImageRequests } from "./image-fit";
 import {
@@ -164,7 +164,7 @@ function languageFromClassName(className: string): string | null {
  */
 export function labelCodeBlockLanguages(root: HTMLElement): void {
 	root.querySelectorAll("pre").forEach((pre) => {
-		if (!(pre instanceof HTMLElement) || pre.dataset.paginaCodeLang === "1") return;
+		if (!pre.instanceOf(HTMLElement) || pre.dataset.paginaCodeLang === "1") return;
 		if (pre.classList.contains("mermaid") || pre.querySelector(".mermaid, svg")) return;
 		const code = [...pre.children].find((child) => child.tagName === "CODE");
 		const codeEl = code instanceof HTMLElement ? code : null;
@@ -173,9 +173,7 @@ export function labelCodeBlockLanguages(root: HTMLElement): void {
 			languageFromClassName(pre.className) ||
 			languageFromClassName(pre.parentElement?.className ?? "");
 		if (!lang) return;
-		const label = document.createElement("span");
-		label.className = "pagina-code-lang";
-		label.textContent = lang;
+		const label = createSpan({ cls: "pagina-code-lang", text: lang });
 		pre.insertBefore(label, pre.firstChild);
 		pre.dataset.paginaCodeLang = "1";
 	});
@@ -616,9 +614,10 @@ export function wireHeadingBackToToc(root: ParentNode): void {
 	if (!toc) return;
 
 	if (!toc.querySelector(`a.md-print-anchor[data-flag="${TOC_ANCHOR_FLAG}"]`)) {
-		const marker = document.createElement("a");
-		marker.setAttribute("href", `af://${TOC_ANCHOR_FLAG}`);
-		marker.className = "md-print-anchor";
+		const marker = createEl("a", {
+			cls: "md-print-anchor",
+			attr: { href: `af://${TOC_ANCHOR_FLAG}` },
+		});
 		marker.dataset.flag = TOC_ANCHOR_FLAG;
 		toc.insertBefore(marker, toc.firstChild);
 	}
@@ -639,10 +638,11 @@ function placeTocBackMarkers(toc: HTMLElement): void {
 		if (!flag) return;
 		const li = entry.closest("li");
 		if (!li || li.querySelector(`a.md-print-anchor[data-flag="tocback-${flag}"]`)) return;
-		const marker = document.createElement("a");
-		marker.className = "md-print-anchor";
+		const marker = createEl("a", {
+			cls: "md-print-anchor",
+			attr: { href: `af://tocback-${flag}` },
+		});
 		marker.dataset.flag = `tocback-${flag}`;
-		marker.setAttribute("href", `af://tocback-${flag}`);
 		li.insertBefore(marker, li.firstChild);
 	});
 }
@@ -664,14 +664,15 @@ function headingBackFlag(root: ParentNode, heading: HTMLElement): string {
 function wrapHeadingTextForToc(heading: HTMLElement, root: ParentNode): void {
 	const movable: ChildNode[] = [];
 	for (const child of Array.from(heading.childNodes)) {
-		if (child instanceof HTMLAnchorElement) continue;
+		if (child.instanceOf(HTMLAnchorElement)) continue;
 		movable.push(child);
 	}
 	if (movable.length === 0) return;
 
-	const link = document.createElement("a");
-	link.className = "pagina-heading-toc-link";
-	link.setAttribute("href", `an://${headingBackFlag(root, heading)}`);
+	const link = createEl("a", {
+		cls: "pagina-heading-toc-link",
+		attr: { href: `an://${headingBackFlag(root, heading)}` },
+	});
 	heading.insertBefore(link, movable[0]!);
 	for (const node of movable) link.appendChild(node);
 }
@@ -990,6 +991,8 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	applyLightVars(printEl);
 	if (opts.cheatSheet && opts.cheatSheetDensity === "continuous") {
 		applyContinuousText(viewEl);
+	} else if (opts.cheatSheet) {
+		markCompactSpacers(viewEl);
 	}
 	if (opts.cheatSheet) applyCheatSheetTitleFont(viewEl);
 

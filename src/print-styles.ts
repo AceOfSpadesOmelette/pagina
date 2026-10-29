@@ -45,17 +45,16 @@ export const CHEAT_SHEET_CSS = `
   font-size: var(--pagina-cheat-font-size, 8pt);
   line-height: 1.05;
   overflow-wrap: break-word;
-  break-after: avoid-page;
   page-break-after: avoid;
   /* Drop Obsidian's reading-view file margins. They pad every column, with or without the title. */
-  margin: 0 !important;
-  padding: 0 !important;
+  margin: 0;
+  padding: 0;
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > :first-child,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + *,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + * > :first-child {
-  margin-top: 0 !important;
+  margin-top: 0;
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
   line-height: 1.05;
@@ -70,11 +69,10 @@ export const CHEAT_SHEET_CSS = `
   margin-bottom: 0.6mm;
 }
 .print.pagina-print.pagina-cheat-sheet hr {
-  margin: 0.6mm 0 !important;
+  margin: 0.6mm 0;
 }
 .print.pagina-print.pagina-cheat-sheet pre,
 .print.pagina-print.pagina-cheat-sheet .pagina-table-fit {
-  break-inside: auto;
   page-break-inside: auto;
 }
 .print.pagina-print.pagina-cheat-sheet {
@@ -95,7 +93,7 @@ export const CHEAT_SHEET_CSS = `
   padding-left: 1.2em;
 }
 .print.pagina-print.pagina-cheat-compact .markdown-preview-view p:empty,
-.print.pagina-print.pagina-cheat-compact .markdown-preview-view p:has(> br:only-child) {
+.print.pagina-print.pagina-cheat-compact .markdown-preview-view p.pagina-spacer-line {
   display: none;
 }
 .print.pagina-print.pagina-cheat-sheet.pagina-uniform-text .markdown-preview-view :is(h1, h2, h3, h4, h5, h6) {
@@ -118,7 +116,7 @@ export const CHEAT_SHEET_CSS = `
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view h1.__title__ {
   font-family: inherit;
   text-align: center;
-  margin: 0 0 1mm !important;
+  margin: 0 0 1mm;
   line-height: 1.05;
   font-size: var(--pagina-cheat-font-size, 8pt);
 }
@@ -208,7 +206,7 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print .edit-block-button {
   display: none;
 }
-.print.pagina-print pre:has(> .pagina-code-lang) {
+.print.pagina-print pre[data-pagina-code-lang="1"] {
   position: relative;
   padding-top: 1.15em;
 }
@@ -224,7 +222,7 @@ ${LIGHT_PRINT_SURFACE_CSS}
 }
 /* Obsidian's reading view uses margin: 2rem on hr. Keep a short break in print. */
 .print.pagina-print hr {
-  margin: 0.5rem 0 !important;
+  margin: 0.5rem 0;
 }
 /* Body H1 only — never the file-name title or Conspectus TOC title. */
 /* Skip the first body H1 so the optional file-name title is not left alone on a page. */
@@ -457,7 +455,7 @@ function measureNowrapText(cell: HTMLElement): number {
 	const host = doc.body;
 	if (!host) return 0;
 	const cs = getComputedStyle(cell);
-	const probe = doc.createElement("span");
+	const probe = host.createSpan();
 	probe.setCssProps({
 		position: "absolute",
 		left: "0",
@@ -484,7 +482,6 @@ function measureNowrapText(cell: HTMLElement): number {
 	for (const node of Array.from(cell.childNodes)) {
 		probe.appendChild(node.cloneNode(true));
 	}
-	host.appendChild(probe);
 	const width = probe.getBoundingClientRect().width;
 	probe.remove();
 	return width;

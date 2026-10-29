@@ -104,6 +104,7 @@ const htmlProto = HTMLElement.prototype as HTMLElement & {
 	removeClass?: (cls: string) => void;
 	toggleClass?: (cls: string, force?: boolean) => void;
 	setCssProps?: (props: Record<string, string>) => void;
+	createSpan?: (o?: DomOpts, cb?: (el: HTMLSpanElement) => void) => HTMLSpanElement;
 };
 if (typeof htmlProto.addClass !== "function") {
 	htmlProto.addClass = function addClass(cls: string) {
@@ -121,6 +122,12 @@ if (typeof htmlProto.addClass !== "function") {
 			this.style.setProperty(prop, value);
 		}
 	};
+	htmlProto.createSpan = function createSpan(o?: DomOpts, cb?: (el: HTMLSpanElement) => void) {
+		const el = applyDom(this.ownerDocument.createElement("span"), o) as HTMLSpanElement;
+		this.appendChild(el);
+		cb?.(el);
+		return el;
+	};
 }
 
 type DomOpts = { cls?: string; attr?: Record<string, string>; text?: string };
@@ -137,10 +144,18 @@ function applyDom(el: HTMLElement, o?: DomOpts): HTMLElement {
 
 const testGlobals = globalThis as typeof globalThis & {
 	createDiv?: (o?: DomOpts) => HTMLDivElement;
+	createSpan?: (o?: DomOpts, cb?: (el: HTMLSpanElement) => void) => HTMLSpanElement;
 	createEl?: (tag: string, o?: DomOpts, cb?: (el: HTMLElement) => void) => HTMLElement;
 };
 if (typeof testGlobals.createDiv !== "function") {
 	testGlobals.createDiv = (o?: DomOpts) => applyDom(document.createElement("div"), o) as HTMLDivElement;
+}
+if (typeof testGlobals.createSpan !== "function") {
+	testGlobals.createSpan = (o?: DomOpts, cb?: (el: HTMLSpanElement) => void) => {
+		const el = applyDom(document.createElement("span"), o) as HTMLSpanElement;
+		cb?.(el);
+		return el;
+	};
 }
 if (typeof testGlobals.createEl !== "function") {
 	testGlobals.createEl = (tag: string, o?: DomOpts, cb?: (el: HTMLElement) => void) => {

@@ -39,6 +39,14 @@ export function applyCheatSheetClasses(printEl: HTMLElement, settings: CheatShee
 	}
 }
 
+/** Compact cheat sheets hide a paragraph whose only element is a line break. */
+export function markCompactSpacers(root: ParentNode): void {
+	root.querySelectorAll("p").forEach((node) => {
+		const elements = [...node.children];
+		if (elements.length === 1 && elements[0]?.tagName === "BR") node.classList.add("pagina-spacer-line");
+	});
+}
+
 function isProtected(el: Element): boolean {
 	return el.matches(PROTECTED) || el.matches(SKIP);
 }
@@ -87,8 +95,7 @@ export function applyContinuousText(root: HTMLElement): void {
 			bucket.length = 0;
 			return;
 		}
-		const paragraph = document.createElement("p");
-		paragraph.className = "pagina-continuous-run";
+		const paragraph = createEl("p", { cls: "pagina-continuous-run" });
 		while (bucket.length) {
 			const node = bucket.shift();
 			if (node) paragraph.appendChild(node);
@@ -125,9 +132,7 @@ export function applyContinuousText(root: HTMLElement): void {
 		if (/^H[1-6]$/.test(el.tagName)) {
 			const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
 			if (!text) return;
-			const strong = document.createElement("strong");
-			strong.className = "pagina-run-heading";
-			strong.textContent = text;
+			const strong = createEl("strong", { cls: "pagina-run-heading", text });
 			bucket.push(strong);
 			appendText(" ");
 			return;

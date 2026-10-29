@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Platform } from "obsidian";
-import { applyCheatSheetClasses, applyContinuousText } from "../src/cheat-sheet";
+import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "../src/cheat-sheet";
 import { contentBoxHasText } from "../src/blank-page";
 import { sanitizeCssText } from "../src/css-sanitize";
 import { computePageLayout } from "../src/paginate";
@@ -145,8 +145,8 @@ describe("exam cheat sheet", () => {
 			"--pagina-cheat-font-size",
 			"--table-text-size: 1em",
 			"page-break-inside: auto",
-			"break-after: avoid-page",
-			"padding: 0 !important",
+			"page-break-after: avoid",
+			"padding: 0",
 			"pagina-cheat-sheet hr",
 		]) {
 			expect(CHEAT_SHEET_CSS).toContain(marker);
@@ -213,6 +213,14 @@ describe("exam cheat sheet", () => {
 		const img = root.querySelector("img");
 		expect(img?.previousElementSibling?.textContent).toContain("before");
 		expect(img?.nextElementSibling?.textContent).toBe("after");
+	});
+
+	it("marks a paragraph that is only a line break", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<p>kept</p><p><br></p><p>also</p>";
+		markCompactSpacers(root);
+		expect(root.querySelector("p.pagina-spacer-line")?.innerHTML).toBe("<br>");
+		expect(root.querySelectorAll("p.pagina-spacer-line")).toHaveLength(1);
 	});
 
 	it("labels a fence language at the top-right of the code block", () => {

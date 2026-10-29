@@ -1,13 +1,13 @@
 /** Turn printed Conspectus entries into a title, optional leaders, and a page-number column. */
 export function layoutConspectusPageNumbers(root: ParentNode): void {
 	root.querySelectorAll(".conspectus-toc").forEach((node) => {
-		if (!(node instanceof HTMLElement)) return;
+		if (!node.instanceOf(HTMLElement)) return;
 		if (node.classList.contains("conspectus-toc-hide-export")) return;
 		const maxLevel = Number(node.getAttribute("data-conspectus-page-numbers") ?? "0");
 		if (!(maxLevel >= 1 && maxLevel <= 6)) return;
 		const leaders = node.getAttribute("data-conspectus-leaders") !== "false";
 		node.querySelectorAll("a[data-heading]").forEach((linkNode) => {
-			if (!(linkNode instanceof HTMLAnchorElement)) return;
+			if (!linkNode.instanceOf(HTMLAnchorElement)) return;
 			const li = linkNode.closest("li");
 			if (!li || li.querySelector(":scope > .conspectus-toc-entry")) return;
 			const level = levelFromClass(li);
@@ -15,22 +15,21 @@ export function layoutConspectusPageNumbers(root: ParentNode): void {
 			const flag = /^an:\/\/(.+)$/.exec(linkNode.getAttribute("href") ?? "")?.[1];
 			if (!flag) return;
 
-			const row = document.createElement("div");
-			row.className = "conspectus-toc-entry";
-			if (leaders) row.classList.add("conspectus-toc-leaders");
+			const row = createDiv({
+				cls: leaders ? "conspectus-toc-entry conspectus-toc-leaders" : "conspectus-toc-entry",
+			});
 			li.insertBefore(row, linkNode);
 			row.appendChild(linkNode);
 			if (leaders) {
-				const leader = document.createElement("span");
-				leader.className = "conspectus-toc-leader";
+				const leader = createSpan({ cls: "conspectus-toc-leader" });
 				row.appendChild(leader);
 			}
-			const page = document.createElement("span");
-			page.className = "conspectus-toc-page";
-			const marker = document.createElement("a");
-			marker.className = "md-print-anchor";
+			const page = createSpan({ cls: "conspectus-toc-page" });
+			const marker = createEl("a", {
+				cls: "md-print-anchor",
+				attr: { href: `af://tocpage-${flag}` },
+			});
 			marker.dataset.flag = `tocpage-${flag}`;
-			marker.setAttribute("href", `af://tocpage-${flag}`);
 			page.appendChild(marker);
 			row.appendChild(page);
 		});
