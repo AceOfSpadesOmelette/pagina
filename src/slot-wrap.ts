@@ -1,10 +1,8 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
-/** 9px at 96dpi, matching the stamped header and footer line. */
+/** 9px at 96dpi, the default header and footer size. */
 export const STAMP_SLOT_FONT_PT = 6.75;
-/** Raster header and footer size. Its 1.2 leading matches one header line. */
-export const RASTER_SLOT_FONT_PT = 9;
 
 /** Width of one header or footer slot. Left, center, and right share the content width equally. */
 export function slotColumnWidth(contentWidth: number): number {

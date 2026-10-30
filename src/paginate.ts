@@ -49,12 +49,16 @@ export function computePageLayout(
 	const footerLines = Math.max(1, bands?.footerLines ?? 1);
 	const margins = resolvePrintMarginsMm({
 		...settings,
-		header: { borderStyle: settings.header.borderStyle, lines: headerLines },
-		footer: { borderStyle: settings.footer.borderStyle, lines: footerLines },
+		header: { borderStyle: settings.header.borderStyle, lines: headerLines, fontSizePt: settings.header.fontSizePt },
+		footer: { borderStyle: settings.footer.borderStyle, lines: footerLines, fontSizePt: settings.footer.fontSizePt },
 	});
 
-	const headerBandMm = settings.displayHeader ? bandHeightMm(settings.header.borderStyle, headerLines) : 0;
-	const footerBandMm = settings.displayFooter ? bandHeightMm(settings.footer.borderStyle, footerLines) : 0;
+	const headerBandMm = settings.displayHeader
+		? bandHeightMm(settings.header.borderStyle, headerLines, settings.header.fontSizePt)
+		: 0;
+	const footerBandMm = settings.displayFooter
+		? bandHeightMm(settings.footer.borderStyle, footerLines, settings.footer.fontSizePt)
+		: 0;
 
 	const contentWidthMm = Math.max(1, page.width - margins.left - margins.right);
 	const contentHeightMm = Math.max(1, page.height - margins.top - margins.bottom);

@@ -3,13 +3,13 @@ import html2canvas from "html2canvas";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 
 export { isPhoneSession } from "./session";
-import type { PaginaSettings, TimestampFormat } from "./types";
+import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
 import { borderExtentMm, drawBorderBand } from "./header-borders";
 import {
 	footerBaselineFromBottomMm,
 	FRAME_INSET_MM,
 	headerBaselineFromTopMm,
-	LINE_MM,
+	lineMm,
 	TEXT_BORDER_GAP_MM,
 } from "./header-footer-layout";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
@@ -59,7 +59,7 @@ import {
 	sectionTitleForPage,
 	slotsUseSection,
 } from "./section-title";
-import { RASTER_SLOT_FONT_PT, slotColumnWidth, slotLineCount, STAMP_SLOT_FONT_PT, widestText, widthOfFont, wrapSlotText } from "./slot-wrap";
+import { slotColumnWidth, slotLineCount, widestText, widthOfFont, wrapSlotText } from "./slot-wrap";
 
 export interface BuildPdfResult {
 	bytes: Uint8Array;
@@ -179,7 +179,7 @@ async function buildPdfBytesElectron(
 			headingSources,
 			level,
 			slotColumnWidth(columnPt),
-			STAMP_SLOT_FONT_PT,
+			clampSlotFontSize(settings.header.fontSizePt),
 		);
 		const footerLines = await runningEdgeLines(
 			settings.displayFooter,
@@ -189,7 +189,7 @@ async function buildPdfBytesElectron(
 			headingSources,
 			level,
 			slotColumnWidth(columnPt),
-			STAMP_SLOT_FONT_PT,
+			clampSlotFontSize(settings.footer.fontSizePt),
 		);
 		const bands = { headerLines, footerLines };
 		const bandWarning = layoutWarning(settings, bands);
@@ -360,7 +360,7 @@ export async function buildPdfBytesRaster(
 				headingSources,
 				level,
 				columnPt,
-				RASTER_SLOT_FONT_PT,
+				clampSlotFontSize(settings.header.fontSizePt),
 			),
 			footerLines: await runningEdgeLines(
 				settings.displayFooter,
@@ -370,7 +370,7 @@ export async function buildPdfBytesRaster(
 				headingSources,
 				level,
 				columnPt,
-				RASTER_SLOT_FONT_PT,
+				clampSlotFontSize(settings.footer.fontSizePt),
 			),
 		};
 		const bandWarning = layoutWarning(settings, bands);
@@ -874,8 +874,9 @@ function drawHeaderFooter(
 	const centerX = contentLeft + contentWidth / 2;
 
 	if (settings.displayHeader) {
+		const headerPt = clampSlotFontSize(settings.header.fontSizePt);
 		const borderMm = borderExtentMm(settings.header.borderStyle);
-		const textY = headerBaselineFromTopMm();
+		const textY = headerBaselineFromTopMm(headerPt);
 		drawSlots(
 			page,
 			pageHeightPt,
@@ -897,14 +898,15 @@ function drawHeaderFooter(
 				settings.header.borderStyle,
 				settings.header.borderColor,
 				contentLeft,
-				FRAME_INSET_MM + LINE_MM * layout.headerLines + TEXT_BORDER_GAP_MM,
+				FRAME_INSET_MM + lineMm(headerPt) * layout.headerLines + TEXT_BORDER_GAP_MM,
 				contentWidth,
 			);
 		}
 	}
 	if (settings.displayFooter) {
+		const footerPt = clampSlotFontSize(settings.footer.fontSizePt);
 		const borderMm = borderExtentMm(settings.footer.borderStyle);
-		const textY = layout.pageHeightMm - footerBaselineFromBottomMm();
+		const textY = layout.pageHeightMm - footerBaselineFromBottomMm(footerPt);
 		if (borderMm > 0) {
 			drawBorderBand(
 				page,
@@ -912,7 +914,7 @@ function drawHeaderFooter(
 				settings.footer.borderStyle,
 				settings.footer.borderColor,
 				contentLeft,
-				layout.pageHeightMm - FRAME_INSET_MM - LINE_MM * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
+				layout.pageHeightMm - FRAME_INSET_MM - lineMm(footerPt) * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
 				contentWidth,
 			);
 		}
@@ -938,7 +940,7 @@ function drawSlots(
 	pageHeightPt: number,
 	font: PDFFont,
 	ink: ReturnType<typeof rgb>,
-	slots: { left: string; center: string; right: string; datetimeFormat?: string },
+	slots: { left: string; center: string; right: string; datetimeFormat?: string; fontSizePt?: number },
 	leftX: number,
 	centerX: number,
 	rightX: number,
@@ -949,9 +951,10 @@ function drawSlots(
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
 	const colW = slotColumnWidth(maxWidth);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left", direction);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center", direction);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right", direction);
+	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left", direction, fontPt);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center", direction, fontPt);
+	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right", direction, fontPt);
 }
 
 function drawSlot(
@@ -965,10 +968,12 @@ function drawSlot(
 	maxWidthMm: number,
 	align: "left" | "center" | "right",
 	direction: "down" | "up",
+	fontPt: number,
 ): void {
 	const printable = winAnsi(text);
 	if (!printable) return;
-	const size = RASTER_SLOT_FONT_PT;
+	const size = fontPt;
+	const step = lineMm(size);
 	const lines = wrapSlotText(
 		printable,
 		(sample) => {
@@ -990,7 +995,7 @@ function drawSlot(
 		let x = pt(anchorMm);
 		if (align === "center") x = pt(anchorMm) - width / 2;
 		if (align === "right") x = pt(anchorMm) - width;
-		const lineY = direction === "down" ? yMm + index * LINE_MM : yMm - index * LINE_MM;
+		const lineY = direction === "down" ? yMm + index * step : yMm - index * step;
 		try {
 			page.drawText(line, {
 				x,

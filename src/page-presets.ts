@@ -127,8 +127,8 @@ export interface LayoutInput {
 	customMarginRightMm: number;
 	displayHeader?: boolean;
 	displayFooter?: boolean;
-	header?: { borderStyle?: string; lines?: number };
-	footer?: { borderStyle?: string; lines?: number };
+	header?: { borderStyle?: string; lines?: number; fontSizePt?: number };
+	footer?: { borderStyle?: string; lines?: number; fontSizePt?: number };
 }
 
 /**
@@ -149,8 +149,18 @@ export function resolvePrintMarginsMm(input: LayoutInput): {
 	});
 	const vertical = effectiveVerticalMargins(
 		margins,
-		{ display: Boolean(input.displayHeader), borderStyle: input.header?.borderStyle, lines: input.header?.lines },
-		{ display: Boolean(input.displayFooter), borderStyle: input.footer?.borderStyle, lines: input.footer?.lines },
+		{
+			display: Boolean(input.displayHeader),
+			borderStyle: input.header?.borderStyle,
+			lines: input.header?.lines,
+			fontSizePt: input.header?.fontSizePt,
+		},
+		{
+			display: Boolean(input.displayFooter),
+			borderStyle: input.footer?.borderStyle,
+			lines: input.footer?.lines,
+			fontSizePt: input.footer?.fontSizePt,
+		},
 	);
 	return {
 		top: vertical.top,
@@ -167,8 +177,8 @@ function withBandLines(
 	if (!bands) return input;
 	return {
 		...input,
-		header: { borderStyle: input.header?.borderStyle, lines: bands.headerLines },
-		footer: { borderStyle: input.footer?.borderStyle, lines: bands.footerLines },
+		header: { borderStyle: input.header?.borderStyle, lines: bands.headerLines, fontSizePt: input.header?.fontSizePt },
+		footer: { borderStyle: input.footer?.borderStyle, lines: bands.footerLines, fontSizePt: input.footer?.fontSizePt },
 	};
 }
 

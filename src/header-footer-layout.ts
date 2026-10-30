@@ -1,52 +1,69 @@
 import { borderExtentMm } from "./header-borders";
+import { SLOT_FONT_DEFAULT_PT } from "./types";
 
 /** Chromium's header and footer frames start this far inside the page edge. */
 export const FRAME_INSET_MM = 5.1;
-/** 9px running text, in millimetres. */
-export const EM_MM = (9 / 96) * 25.4;
+
+/** One em in millimetres for a point size. 6.75pt is 9px at 96dpi. */
+export function emMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return (fontSizePt * 25.4) / 72;
+}
+
 /**
  * Extra depth under the baseline. Atkinson Hyperlegible's y, g, and p
- * extend past a 9px line box and were sliced by the rule.
+ * extend past a single em and were sliced by the rule. The extra room stays
+ * 0.6 of the em.
  */
-export const DESCENDER_MM = EM_MM * 0.6;
+export function descenderMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return emMm(fontSizePt) * 0.6;
+}
+
 /** Line box: the em square plus room for descenders. */
-export const LINE_MM = EM_MM + DESCENDER_MM;
+export function lineMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return emMm(fontSizePt) + descenderMm(fontSizePt);
+}
+
+/** 9px running text, in millimetres. */
+export const EM_MM = emMm();
+export const DESCENDER_MM = descenderMm();
+export const LINE_MM = lineMm();
 /** Space between the text and its border. */
 export const TEXT_BORDER_GAP_MM = 0.8;
 
 /** Header baseline, measured from the top of the page. */
-export function headerBaselineFromTopMm(): number {
-	return FRAME_INSET_MM + DESCENDER_MM / 2 + EM_MM * 0.8;
+export function headerBaselineFromTopMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return FRAME_INSET_MM + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.8;
 }
 
 /** Footer baseline, measured from the bottom of the page. */
-export function footerBaselineFromBottomMm(): number {
-	return FRAME_INSET_MM + DESCENDER_MM / 2 + EM_MM * 0.2;
+export function footerBaselineFromBottomMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return FRAME_INSET_MM + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.2;
 }
 /** Space between the border and the note body. */
 export const CLEARANCE_MM = 1.0;
 
-export function bandHeightMm(borderStyle: string | undefined, lines = 1): number {
+export function bandHeightMm(borderStyle: string | undefined, lines = 1, fontSizePt = SLOT_FONT_DEFAULT_PT): number {
 	const count = Math.max(1, lines);
-	return LINE_MM * count + TEXT_BORDER_GAP_MM + borderExtentMm(borderStyle);
+	return lineMm(fontSizePt) * count + TEXT_BORDER_GAP_MM + borderExtentMm(borderStyle);
 }
 
-export function requiredMarginMm(borderStyle: string | undefined, lines = 1): number {
-	return FRAME_INSET_MM + bandHeightMm(borderStyle, lines) + CLEARANCE_MM;
+export function requiredMarginMm(borderStyle: string | undefined, lines = 1, fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+	return FRAME_INSET_MM + bandHeightMm(borderStyle, lines, fontSizePt) + CLEARANCE_MM;
 }
 
 /**
  * Grow the top and bottom margins so the header and footer bands, including
  * Chromium's frame inset, stay outside the note body. The user's margin is the minimum.
+ * A larger footer deepens only the bottom margin.
  */
 export function effectiveVerticalMargins(
 	user: { top: number; bottom: number },
-	header: { display: boolean; borderStyle?: string; lines?: number },
-	footer: { display: boolean; borderStyle?: string; lines?: number },
+	header: { display: boolean; borderStyle?: string; lines?: number; fontSizePt?: number },
+	footer: { display: boolean; borderStyle?: string; lines?: number; fontSizePt?: number },
 ): { top: number; bottom: number } {
 	return {
-		top: header.display ? Math.max(user.top, requiredMarginMm(header.borderStyle, header.lines)) : user.top,
-		bottom: footer.display ? Math.max(user.bottom, requiredMarginMm(footer.borderStyle, footer.lines)) : user.bottom,
+		top: header.display ? Math.max(user.top, requiredMarginMm(header.borderStyle, header.lines, header.fontSizePt)) : user.top,
+		bottom: footer.display ? Math.max(user.bottom, requiredMarginMm(footer.borderStyle, footer.lines, footer.fontSizePt)) : user.bottom,
 	};
 }
 

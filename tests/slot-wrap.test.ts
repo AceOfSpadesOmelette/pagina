@@ -51,4 +51,20 @@ describe("header and footer slots", () => {
 		expect(margins.top).toBeCloseTo(requiredMarginMm("none", 2));
 		expect(margins.bottom).toBeCloseTo(requiredMarginMm("none", 1));
 	});
+
+	it("grows only the footer margin when the footer text is larger", () => {
+		const base = effectiveVerticalMargins(
+			{ top: 9, bottom: 9 },
+			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
+			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
+		);
+		const largerFooter = effectiveVerticalMargins(
+			{ top: 9, bottom: 9 },
+			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
+			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 14 },
+		);
+		expect(largerFooter.top).toBeCloseTo(base.top);
+		expect(largerFooter.bottom).toBeGreaterThan(base.bottom);
+		expect(requiredMarginMm("none", 1)).toBeCloseTo(requiredMarginMm("none", 1, 6.75));
+	});
 });

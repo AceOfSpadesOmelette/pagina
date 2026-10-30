@@ -9,6 +9,8 @@ export interface HeaderFooterSlots {
 	textColor?: string;
 	/** CSS font-family name. Blank uses the font of the open note. */
 	fontFamily?: string;
+	/** Running text size in points. The default, 6.75, is the current 9px. */
+	fontSizePt?: number;
 	/** Applied to a plain {{datetime}}. An explicit {{datetime:FORMAT}} still wins. */
 	datetimeFormat?: DatetimeFormat;
 }
@@ -36,6 +38,12 @@ export type MaxHeadingLevel = "1" | "2" | "3" | "4" | "5" | "6";
 
 /** Compact keeps each line. Continuous joins text into one run. */
 export type CheatSheetDensity = "compact" | "continuous";
+
+/** Header and footer text. 6.75pt is 9px at 96dpi, the size used before this setting. */
+export const SLOT_FONT_MIN_PT = 6;
+export const SLOT_FONT_MAX_PT = 18;
+export const SLOT_FONT_DEFAULT_PT = 6.75;
+export const SLOT_FONT_STEP_PT = 0.25;
 
 export const CHEAT_SHEET_FONT_MIN_PT = 6;
 export const CHEAT_SHEET_FONT_MAX_PT = 14;
@@ -132,6 +140,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 		borderColor: "#000000",
 		textColor: "#555555",
 		fontFamily: "",
+		fontSizePt: SLOT_FONT_DEFAULT_PT,
 		datetimeFormat: "locale",
 	},
 	displayFooter: true,
@@ -143,6 +152,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 		borderColor: "#000000",
 		textColor: "#555555",
 		fontFamily: "",
+		fontSizePt: SLOT_FONT_DEFAULT_PT,
 		datetimeFormat: "locale",
 	},
 	sectionHeadingLevel: "1",
@@ -205,6 +215,7 @@ function normalizeSlots(defaults: HeaderFooterSlots, raw?: Partial<HeaderFooterS
 	const slots = { ...defaults, ...(raw ?? {}) };
 	slots.borderStyle = normalizeBorderStyle(slots.borderStyle);
 	slots.datetimeFormat = normalizeDatetimeFormat(slots.datetimeFormat);
+	slots.fontSizePt = clampSlotFontSize(raw?.fontSizePt ?? defaults.fontSizePt);
 	return slots;
 }
 
@@ -215,6 +226,19 @@ function normalizeDatetimeFormat(value: unknown): DatetimeFormat {
 
 function clamp(n: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, n));
+}
+
+export function clampSlotFontSize(value: unknown): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string" && value.trim() !== ""
+				? Number(value)
+				: Number.NaN;
+	const base = Number.isFinite(parsed) ? parsed : SLOT_FONT_DEFAULT_PT;
+	const clamped = clamp(base, SLOT_FONT_MIN_PT, SLOT_FONT_MAX_PT);
+	const steps = Math.round((clamped - SLOT_FONT_MIN_PT) / SLOT_FONT_STEP_PT);
+	return Math.round((SLOT_FONT_MIN_PT + steps * SLOT_FONT_STEP_PT) * 100) / 100;
 }
 
 export function clampCheatSheetFontSize(value: unknown): number {

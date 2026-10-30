@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Platform } from "obsidian";
+import { PaginaSettingTab } from "../src/settings";
 import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "../src/cheat-sheet";
 import { contentBoxHasText } from "../src/blank-page";
 import { sanitizeCssText } from "../src/css-sanitize";
@@ -87,6 +88,38 @@ describe("settings", () => {
 		expect(settings.cheatSheetFontSizePt).toBe(8);
 		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
+		expect(settings.header.fontSizePt).toBe(6.75);
+		expect(settings.footer.fontSizePt).toBe(6.75);
+	});
+
+	it("keeps a missing header or footer size at 6.75 and clamps the rest", () => {
+		const missing = normalizeSettings({
+			header: { left: "", center: "{{title}}", right: "" },
+			footer: { left: "", center: "", right: "" },
+		});
+		expect(missing.header.fontSizePt).toBe(6.75);
+		expect(missing.footer.fontSizePt).toBe(6.75);
+		const clamped = normalizeSettings({
+			header: { left: "", center: "", right: "", fontSizePt: 99 },
+			footer: { left: "", center: "", right: "", fontSizePt: 3 },
+		});
+		expect(clamped.header.fontSizePt).toBe(18);
+		expect(clamped.footer.fontSizePt).toBe(6);
+	});
+
+	it("accepts header.fontSizePt and footer.fontSizePt from the settings command", async () => {
+		const plugin = {
+			settings: normalizeSettings({}),
+			saveSettings: async () => {},
+		};
+		const tab = new PaginaSettingTab({} as never, plugin as never);
+		const keys = JSON.stringify(tab.getSettingDefinitions());
+		expect(keys).toContain('"key":"header.fontSizePt"');
+		expect(keys).toContain('"key":"footer.fontSizePt"');
+		await tab.setControlValue("header.fontSizePt", 14);
+		await tab.setControlValue("footer.fontSizePt", "12");
+		expect(plugin.settings.header.fontSizePt).toBe(14);
+		expect(plugin.settings.footer.fontSizePt).toBe(12);
 	});
 
 	it("clamps cheat sheet text size and density", () => {

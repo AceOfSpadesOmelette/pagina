@@ -8,7 +8,7 @@ import {
 	downloadSettingsJson,
 	parseSettingsJson,
 } from "./settings-io";
-import { cheatSheetColumnBounds, clampCheatSheetColumns, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings } from "./types";
+import { cheatSheetColumnBounds, clampCheatSheetColumns, clampSlotFontSize, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, SLOT_FONT_DEFAULT_PT, SLOT_FONT_MAX_PT, SLOT_FONT_MIN_PT, SLOT_FONT_STEP_PT } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
 export interface RenderPaginaSettingsOptions {
@@ -557,6 +557,19 @@ function addSlotSettings(
 					notify();
 				});
 		});
+
+	new Setting(container)
+		.setName(`${label} text size`)
+		.setDesc("Points, from 6 to 18. The default, 6.75, is the current 9px size.")
+		.addSlider((slider) =>
+			slider
+				.setLimits(SLOT_FONT_MIN_PT, SLOT_FONT_MAX_PT, SLOT_FONT_STEP_PT)
+				.setValue(slots.fontSizePt ?? SLOT_FONT_DEFAULT_PT)
+				.onChange((value) => {
+					slots.fontSizePt = clampSlotFontSize(value);
+					notify();
+				}),
+		);
 
 	new Setting(container).setName(`${label} date/time format`).addDropdown((dd) => {
 		for (const format of DATETIME_FORMATS) {

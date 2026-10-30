@@ -14,11 +14,15 @@ import {
 	cheatSheetColumnChoices,
 	clampCheatSheetColumns,
 	clampCheatSheetFontSize,
+	clampSlotFontSize,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
 	type HeaderFooterSlots,
 	type MaxHeadingLevel,
 	type PaginaSettings,
+	SLOT_FONT_MAX_PT,
+	SLOT_FONT_MIN_PT,
+	SLOT_FONT_STEP_PT,
 	type TimestampFormat,
 } from "./types";
 import { VARIABLE_HINT } from "./variables";
@@ -56,7 +60,7 @@ function isHexColor(value: string): boolean {
 type SlotField = keyof HeaderFooterSlots;
 
 function slotKey(key: string): { which: "header" | "footer"; field: SlotField } | null {
-	const match = /^(header|footer)\.(left|center|right|borderStyle|borderColor|textColor|fontFamily|datetimeFormat)$/.exec(key);
+	const match = /^(header|footer)\.(left|center|right|borderStyle|borderColor|textColor|fontFamily|fontSizePt|datetimeFormat)$/.exec(key);
 	if (!match) return null;
 	return { which: match[1] as "header" | "footer", field: match[2] as SlotField };
 }
@@ -441,6 +445,18 @@ export class PaginaSettingTab extends PluginSettingTab {
 				control: { type: "text", key: `${which}.fontFamily`, placeholder: "e.g. Georgia, Times New Roman" },
 			},
 			{
+				name: `${label} text size`,
+				desc: "Points, from 6 to 18. The default, 6.75, is the current 9px size.",
+				visible,
+				control: {
+					type: "slider",
+					key: `${which}.fontSizePt`,
+					min: SLOT_FONT_MIN_PT,
+					max: SLOT_FONT_MAX_PT,
+					step: SLOT_FONT_STEP_PT,
+				},
+			},
+			{
 				name: `${label} date/time format`,
 				visible,
 				control: { type: "dropdown", key: `${which}.datetimeFormat`, options: formats },
@@ -463,6 +479,10 @@ export class PaginaSettingTab extends PluginSettingTab {
 			if (typeof value !== "string" || (value !== "" && !isHexColor(value))) return false;
 			const fallback = field === "borderColor" ? "#000000" : "#555555";
 			slots[field] = value || fallback;
+			return true;
+		}
+		if (field === "fontSizePt") {
+			slots.fontSizePt = clampSlotFontSize(value);
 			return true;
 		}
 		if (typeof value !== "string") return false;

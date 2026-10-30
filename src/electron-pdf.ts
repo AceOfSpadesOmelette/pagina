@@ -3,8 +3,8 @@ import os from "os";
 import path from "path";
 import electron from "electron";
 import { borderSvg } from "./header-borders";
-import { EM_MM, LINE_MM, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
-import type { PaginaSettings, TimestampFormat } from "./types";
+import { emMm, lineMm, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
+import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { formatTimestamp, renderTemplate, type VariableContext } from "./variables";
 
@@ -187,6 +187,7 @@ function headerFooterHtml(
 		borderColor?: string;
 		textColor?: string;
 		fontFamily?: string;
+		fontSizePt?: number;
 		datetimeFormat?: string;
 	},
 	ctx: VariableContext,
@@ -203,9 +204,10 @@ function headerFooterHtml(
 	const textColor = slots.textColor || "#555555";
 	const fontFamily = cssFontFamily(slots.fontFamily, noteFont);
 	const rule = borderSvg(slots.borderStyle, slots.borderColor);
-	const linePx = mmToCssPx(LINE_MM);
-	const rowPx = mmToCssPx(LINE_MM * Math.max(1, lines));
-	const emPx = mmToCssPx(EM_MM);
+	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const linePx = mmToCssPx(lineMm(fontPt));
+	const rowPx = mmToCssPx(lineMm(fontPt) * Math.max(1, lines));
+	const emPx = mmToCssPx(emMm(fontPt));
 	const gapPx = mmToCssPx(TEXT_BORDER_GAP_MM);
 	const justify = edge === "header" ? "flex-start" : "flex-end";
 	const alignItems = edge === "header" ? "flex-start" : "flex-end";
@@ -218,7 +220,7 @@ ${slot("left", left)}${slot("center", center)}${slot("right", right)}
 </div>`;
 	if (omitText && !rule) return "<span></span>";
 	const body = edge === "header" ? `${row}${gapHtml}${ruleHtml}` : `${ruleHtml}${gapHtml}${row}`;
-	return `<div style="width:100%;height:100%;box-sizing:border-box;font-size:9px;line-height:${linePx}px;font-family:${fontFamily};color:${textColor};padding-left:${marginLeftIn}in;padding-right:${marginRightIn}in;display:flex;flex-direction:column;justify-content:${justify};">${body}</div>`;
+	return `<div style="width:100%;height:100%;box-sizing:border-box;font-size:${emPx}px;line-height:${linePx}px;font-family:${fontFamily};color:${textColor};padding-left:${marginLeftIn}in;padding-right:${marginRightIn}in;display:flex;flex-direction:column;justify-content:${justify};">${body}</div>`;
 }
 
 export interface ElectronPrintExtras {
@@ -244,8 +246,16 @@ export function makeElectronPrintOptions(
 	);
 	const banded = {
 		...settings,
-		header: { borderStyle: settings.header.borderStyle, lines: extras?.headerLines },
-		footer: { borderStyle: settings.footer.borderStyle, lines: extras?.footerLines },
+		header: {
+			borderStyle: settings.header.borderStyle,
+			lines: extras?.headerLines,
+			fontSizePt: settings.header.fontSizePt,
+		},
+		footer: {
+			borderStyle: settings.footer.borderStyle,
+			lines: extras?.footerLines,
+			fontSizePt: settings.footer.fontSizePt,
+		},
 	};
 	const margins = resolvePrintMarginsMm(banded);
 	const layoutMessage = layoutWarning(banded);

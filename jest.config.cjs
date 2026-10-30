@@ -6,6 +6,7 @@ module.exports = {
 	testMatch: ["**/*.test.ts"],
 	moduleNameMapper: {
 		"^obsidian$": "<rootDir>/__mocks__/obsidian.ts",
+		"^electron$": "<rootDir>/__mocks__/electron.ts",
 	},
 	transform: {
 		"^.+\\.tsx?$": [

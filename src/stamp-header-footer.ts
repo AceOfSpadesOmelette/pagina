@@ -1,13 +1,10 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
-import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, LINE_MM, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
+import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
 import { resolvePrintMarginsMm } from "./page-presets";
-import { slotColumnWidth, slotLeftEdges, STAMP_SLOT_FONT_PT, wrapSlotText } from "./slot-wrap";
-import type { HeaderFooterSlots, PaginaSettings } from "./types";
+import { slotColumnWidth, slotLeftEdges, wrapSlotText } from "./slot-wrap";
+import { clampSlotFontSize, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
-
-/** 9px at 96dpi, matching the header and footer line. */
-const FONT_PT = STAMP_SLOT_FONT_PT;
 
 export interface StampOptions {
 	/** Paint out Chromium's header or footer text before drawing a replacement. */
@@ -68,26 +65,28 @@ export async function stampHeaderFooter(
 		};
 		const { height } = page.getSize();
 		if (settings.displayHeader && headerFont) {
-			if (options?.cover && !fonts.header) coverEdge(page, "header");
+			const headerPt = clampSlotFontSize(settings.header.fontSizePt);
+			if (options?.cover && !fonts.header) coverEdge(page, "header", headerPt);
 			drawEdge(
 				page,
 				headerFont,
 				settings.header,
 				pageCtx,
 				margins,
-				height - mm(headerBaselineFromTopMm()),
+				height - mm(headerBaselineFromTopMm(headerPt)),
 				"header",
 			);
 		}
 		if (settings.displayFooter && footerFont) {
-			if (options?.cover && !fonts.footer) coverEdge(page, "footer");
+			const footerPt = clampSlotFontSize(settings.footer.fontSizePt);
+			if (options?.cover && !fonts.footer) coverEdge(page, "footer", footerPt);
 			drawEdge(
 				page,
 				footerFont,
 				settings.footer,
 				pageCtx,
 				margins,
-				mm(footerBaselineFromBottomMm()),
+				mm(footerBaselineFromBottomMm(footerPt)),
 				"footer",
 			);
 		}
@@ -96,9 +95,9 @@ export async function stampHeaderFooter(
 }
 
 /** Cover the running text, and stop short of the border rule. */
-function coverEdge(page: PDFPage, edge: "header" | "footer"): void {
+function coverEdge(page: PDFPage, edge: "header" | "footer", fontSizePt: number): void {
 	const { width, height } = page.getSize();
-	const band = mm(FRAME_INSET_MM + LINE_MM + TEXT_BORDER_GAP_MM * 0.5);
+	const band = mm(FRAME_INSET_MM + lineMm(fontSizePt) + TEXT_BORDER_GAP_MM * 0.5);
 	if (edge === "header") {
 		page.drawRectangle({ x: 0, y: height - band, width, height: band, color: rgb(1, 1, 1) });
 		return;
@@ -122,10 +121,11 @@ function drawEdge(
 	const col = slotColumnWidth(content);
 	const [leftSlot, centerSlot, rightSlot] = slotLeftEdges(left, content);
 	const color = parseColor(slots.textColor || "#555555");
-	const lineAdvance = mm(LINE_MM);
+	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const lineAdvance = mm(lineMm(fontPt));
 	const widthOf = (sample: string): number | null => {
 		try {
-			return font.widthOfTextAtSize(sample, FONT_PT);
+			return font.widthOfTextAtSize(sample, fontPt);
 		} catch {
 			return null;
 		}
@@ -135,7 +135,7 @@ function drawEdge(
 		lines.forEach((line, index) => {
 			let textWidth = 0;
 			try {
-				textWidth = font.widthOfTextAtSize(line, FONT_PT);
+				textWidth = font.widthOfTextAtSize(line, fontPt);
 			} catch {
 				return;
 			}
@@ -143,7 +143,7 @@ function drawEdge(
 			if (align === "center") x = slotLeft + (col - textWidth) / 2;
 			if (align === "right") x = slotLeft + col - textWidth;
 			const y = edge === "header" ? baseline - index * lineAdvance : baseline + index * lineAdvance;
-			page.drawText(line, { x, y, size: FONT_PT, font, color });
+			page.drawText(line, { x, y, size: fontPt, font, color });
 		});
 	};
 	draw(slots.left, leftSlot, "left");
