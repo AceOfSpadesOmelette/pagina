@@ -82,8 +82,21 @@ export const CHEAT_SHEET_CSS = `
   font-size: 1em;
   line-height: 1.05;
 }
+.print.pagina-print.pagina-cheat-sheet table {
+  table-layout: fixed;
+  width: 100%;
+  max-width: 100%;
+}
 .print.pagina-print.pagina-cheat-sheet :is(th, td) {
   padding: 1px 3px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.print.pagina-print.pagina-cheat-sheet :is(th, td) :is(img, svg, video, canvas, mjx-container, .katex, .math) {
+  max-width: 100%;
+  height: auto;
 }
 .print.pagina-print.pagina-cheat-compact .markdown-preview-view :is(p, li, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, .callout) {
   margin-top: 0;
@@ -572,6 +585,104 @@ function wrapHeaderCell(cell: HTMLElement): void {
 	cell.style.removeProperty("min-width");
 }
 
+/** Cheat-sheet cells wrap inside the column, including a long token. */
+function wrapCheatSheetCell(cell: HTMLElement): void {
+	cell.setCssProps({
+		whiteSpace: "normal",
+		overflowWrap: "anywhere",
+		wordBreak: "break-word",
+	});
+	cell.style.removeProperty("min-width");
+}
+
+/**
+ * No column share may start below this fraction of the table.
+ * Renormalizing can leave the final share slightly under the floor.
+ */
+const CHEAT_SHEET_COLUMN_FLOOR = 0.08;
+
+/**
+ * Longest single-line content in each column.
+ * A colspan splits its width across the columns it covers. A rowspan occupies those columns
+ * in the following rows so the next cell does not land on top of it.
+ */
+function columnContentWeights(table: HTMLTableElement): number[] {
+	const rows = Array.from(table.rows);
+	const occupied: boolean[][] = rows.map(() => []);
+	const weights: number[] = [];
+	const ensure = (count: number) => {
+		while (weights.length < count) weights.push(0);
+	};
+	for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+		const row = rows[rowIndex];
+		if (!row) continue;
+		let column = 0;
+		for (const cell of Array.from(row.cells)) {
+			while (occupied[rowIndex]?.[column]) column += 1;
+			const colSpan = cell.colSpan > 0 ? cell.colSpan : 1;
+			const rowSpan = cell.rowSpan > 0 ? cell.rowSpan : 1;
+			const share = measureNowrapText(cell) / colSpan;
+			for (let offset = 0; offset < colSpan; offset++) {
+				const index = column + offset;
+				ensure(index + 1);
+				if (share > (weights[index] ?? 0)) weights[index] = share;
+				for (let down = 0; down < rowSpan && rowIndex + down < rows.length; down++) {
+					const slot = occupied[rowIndex + down];
+					if (slot) slot[index] = true;
+				}
+			}
+			column += colSpan;
+		}
+	}
+	return weights;
+}
+
+/** Percent widths that sum to 100. Equal shares when nothing could be measured. */
+function columnPercents(weights: readonly number[]): number[] {
+	const count = weights.length;
+	if (count === 0) return [];
+	const total = weights.reduce((sum, weight) => sum + Math.max(0, weight), 0);
+	if (!(total > 0)) return Array.from({ length: count }, () => 100 / count);
+	const floor = Math.min(CHEAT_SHEET_COLUMN_FLOOR, 1 / count);
+	const lifted = weights.map((weight) => Math.max(Math.max(0, weight) / total, floor));
+	const liftedSum = lifted.reduce((sum, share) => sum + share, 0);
+	return lifted.map((share) => (share / liftedSum) * 100);
+}
+
+function formatColumnWidths(percents: readonly number[]): string[] {
+	if (percents.length === 0) return [];
+	const rounded = percents.map((percent) => Math.round(percent * 1000) / 1000);
+	const drift = Math.round((100 - rounded.reduce((sum, value) => sum + value, 0)) * 1000) / 1000;
+	const last = rounded.length - 1;
+	rounded[last] = Math.round(((rounded[last] ?? 0) + drift) * 1000) / 1000;
+	return rounded.map((value) => `${value}%`);
+}
+
+function replaceColumnGroup(table: HTMLTableElement, widths: readonly string[]): void {
+	table.querySelectorAll("colgroup.pagina-table-cols").forEach((node) => node.remove());
+	if (widths.length === 0) return;
+	const group = createEl("colgroup", { cls: "pagina-table-cols" });
+	for (const width of widths) {
+		const col = createEl("col");
+		col.style.width = width;
+		group.appendChild(col);
+	}
+	table.insertBefore(group, table.firstChild);
+}
+
+/**
+ * Pin a cheat-sheet table to the CSS column. Works for 2, 3, and 4 columns:
+ * `width: 100%` with `table-layout: fixed` follows the column box, whatever the count.
+ */
+function pinCheatSheetTable(table: HTMLTableElement): void {
+	for (const cell of table.querySelectorAll<HTMLTableCellElement>("th, td")) {
+		wrapCheatSheetCell(cell);
+	}
+	replaceColumnGroup(table, formatColumnWidths(columnPercents(columnContentWeights(table))));
+	stretchTable(table);
+	table.classList.add("pagina-table-fixed");
+}
+
 /**
  * Keep header cells on one line when that row fits in `availableWidth`.
  * Otherwise wrap them at spaces so a short word is not split.
@@ -635,45 +746,45 @@ function cheatSheetColumnCount(root: HTMLElement): number | null {
  * Keep every column of a wide table on the page by compacting padding, then
  * scaling only that table. Tables that can wrap stay at 100% and body size.
  * Header cells stay on one line when that row fits the fit budget.
- * A cheat sheet budgets one CSS column, not the full page, so a table cannot
- * paint into the next column.
+ * A cheat sheet (2, 3, or 4 columns) pins each table to its CSS column instead.
+ * Zoom leaves the pre-zoom box in a multi-column layout, so it cannot be used there.
  */
 export function fitWideTables(root: HTMLElement): void {
+	if (cheatSheetColumnCount(root) != null) {
+		root.querySelectorAll("table").forEach((table) => {
+			if (table.closest(".pagina-table-fit")) return;
+			pinCheatSheetTable(table);
+		});
+		return;
+	}
+
 	const hostWidth = printableWidth(root);
-	const columns = cheatSheetColumnCount(root);
-	const availableWidth = columns == null ? hostWidth : cheatSheetColumnWidth(hostWidth, columns);
-	root.querySelectorAll("table").forEach((node) => {
-		const table = node;
+	root.querySelectorAll("table").forEach((table) => {
 		if (table.closest(".pagina-table-fit")) return;
 
 		stretchTable(table);
 		void table.offsetWidth;
-		if (columns == null) preferSingleLineHeaders(table, hostWidth);
-		else applyHeaderLinePreference(table, availableWidth);
+		preferSingleLineHeaders(table, hostWidth);
 
 		let needed = tableMinContentWidth(table);
-		if (needed <= availableWidth + TABLE_FIT_SLOP_PX) {
+		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
 			stretchTable(table);
 			return;
 		}
 
 		table.classList.add("pagina-table-compact");
 		void table.offsetWidth;
-		if (columns == null) preferSingleLineHeaders(table, hostWidth);
-		else applyHeaderLinePreference(table, availableWidth);
+		preferSingleLineHeaders(table, hostWidth);
 		needed = tableMinContentWidth(table);
-		if (needed <= availableWidth + TABLE_FIT_SLOP_PX) {
+		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
 			stretchTable(table);
 			return;
 		}
 
-		const scale = Math.min(1, availableWidth / needed);
+		const scale = Math.min(1, hostWidth / needed);
 
 		const wrap = createDiv({ cls: "pagina-table-fit" });
 		wrap.style.width = `${needed}px`;
-		// The column is narrower than this table's min-content. max-width: 100%
-		// would clamp the pre-zoom width and then zoom would shrink it again.
-		if (columns != null) wrap.setCssProps({ maxWidth: "none" });
 		wrap.style.setProperty("zoom", String(scale));
 		table.parentNode?.insertBefore(wrap, table);
 		wrap.appendChild(table);

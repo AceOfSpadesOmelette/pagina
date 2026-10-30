@@ -535,8 +535,21 @@ img.__canvas__ {
 	font-size: 1em;
 	line-height: 1.05;
 }
+.print.pagina-print.pagina-cheat-sheet table {
+	table-layout: fixed;
+	width: 100%;
+	max-width: 100%;
+}
 .print.pagina-print.pagina-cheat-sheet :is(th, td) {
 	padding: 1px 3px;
+	min-width: 0;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+.print.pagina-print.pagina-cheat-sheet :is(th, td) :is(img, svg, video, canvas, mjx-container, .katex, .math) {
+	max-width: 100%;
+	height: auto;
 }
 .print.pagina-print.pagina-cheat-compact .markdown-preview-view :is(p, li, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, .callout) {
 	margin-top: 0;

@@ -8,7 +8,6 @@ import { computePageLayout } from "../src/paginate";
 import { effectiveLandscape, resolvePageSizeMm, validateLayout } from "../src/page-presets";
 import {
 	applyHeaderLinePreference,
-	cheatSheetColumnWidth,
 	CHEAT_SHEET_CSS,
 	fitWideTables,
 	headerLineFits,
@@ -144,6 +143,8 @@ describe("exam cheat sheet", () => {
 			"pagina-uniform-text",
 			"--pagina-cheat-font-size",
 			"--table-text-size: 1em",
+			"table-layout: fixed",
+			"overflow-wrap: anywhere",
 			"page-break-inside: auto",
 			"page-break-after: avoid",
 			"padding: 0",
@@ -399,29 +400,30 @@ describe("cheat sheet table fit", () => {
 		return { root, table };
 	}
 
+	function columnWidths(table: HTMLTableElement): string[] {
+		return [...table.querySelectorAll("col")].map((col) => col.style.width);
+	}
+
 	afterEach(() => {
 		document.body.innerHTML = "";
 	});
 
-	it("scales a table that fits the page but not one cheat-sheet column", () => {
+	it.each([2, 3, 4])("pins a table inside a %i-column cheat sheet", (count) => {
 		const restore = mockHeaderTextWidth(20);
 		const zoom = captureZoom();
 		try {
-			const { root, table } = mountTable(4);
+			const { root, table } = mountTable(count);
 			fitWideTables(root);
-			const wrap = root.querySelector(".pagina-table-fit");
-			expect(wrap).toBeInstanceOf(HTMLElement);
-			const fit = wrap as HTMLElement;
-			const column = cheatSheetColumnWidth(HOST_WIDTH, 4);
-			expect(column).toBeLessThan(MIN_CONTENT);
-			expect(MIN_CONTENT).toBeLessThan(HOST_WIDTH);
-			expect(zoom.value()).toBeCloseTo(column / MIN_CONTENT, 5);
-			expect(fit.style.width).toBe(`${MIN_CONTENT}px`);
-			expect(fit.style.maxWidth).toBe("none");
-			expect(table.classList.contains("pagina-table-natural")).toBe(true);
+			expect(root.querySelector(".pagina-table-fit")).toBeNull();
+			expect(Number.isNaN(zoom.value())).toBe(true);
+			expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+			expect(table.classList.contains("pagina-table-full")).toBe(true);
+			// "Storage Tier" is 12 characters and "Architectural Unit" is 18.
+			expect(columnWidths(table)).toEqual(["40%", "60%"]);
 			for (const cell of table.querySelectorAll("th")) {
 				expect(cell.style.whiteSpace).toBe("normal");
-				expect(cell.style.overflowWrap).toBe("break-word");
+				expect(cell.style.overflowWrap).toBe("anywhere");
+				expect(cell.style.wordBreak).toBe("break-word");
 				expect(cell.style.minWidth).toBe("");
 			}
 		} finally {
@@ -436,6 +438,7 @@ describe("cheat sheet table fit", () => {
 			const { root, table } = mountTable(null);
 			fitWideTables(root);
 			expect(root.querySelector(".pagina-table-fit")).toBeNull();
+			expect(table.classList.contains("pagina-table-fixed")).toBe(false);
 			expect(table.classList.contains("pagina-table-full")).toBe(true);
 			for (const cell of table.querySelectorAll("th")) {
 				expect(cell.style.whiteSpace).toBe("nowrap");
@@ -445,23 +448,60 @@ describe("cheat sheet table fit", () => {
 		}
 	});
 
-	it("does not scale a cheat-sheet table that already fits one column", () => {
-		const { root, table } = mountTable(4);
+	it("pins a narrow cheat-sheet table instead of leaving it to auto layout", () => {
+		const { root, table } = mountTable(3);
 		setMinContent(table, 40);
 		fitWideTables(root);
 		expect(root.querySelector(".pagina-table-fit")).toBeNull();
-		expect(table.classList.contains("pagina-table-full")).toBe(true);
+		expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+		expect(columnWidths(table)).toEqual(["50%", "50%"]);
 	});
 
-	it("defaults to three columns when the cheat sheet does not set a count", () => {
-		const zoom = captureZoom();
+	it("pins when the cheat sheet does not set a column count", () => {
+		const { root, table } = mountTable(0);
+		fitWideTables(root);
+		expect(root.querySelector(".pagina-table-fit")).toBeNull();
+		expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+	});
+
+	it("splits a spanning cell across the columns it covers", () => {
+		const restore = mockHeaderTextWidth(10);
 		try {
-			const { root } = mountTable(0);
+			const { root, table } = mountTable(2);
+			table.innerHTML =
+				"<tr><th colspan='2'>abcdefghij</th></tr><tr><td>xxxx</td><td>yyyyyyyyyyyyyyyyyyyy</td></tr>";
 			fitWideTables(root);
-			expect(root.querySelector(".pagina-table-fit")).toBeInstanceOf(HTMLElement);
-			expect(zoom.value()).toBeCloseTo(cheatSheetColumnWidth(HOST_WIDTH, 3) / MIN_CONTENT, 5);
+			expect(columnWidths(table)).toEqual(["20%", "80%"]);
 		} finally {
-			zoom.restore();
+			restore();
+		}
+	});
+
+	it("skips a column already occupied by a rowspan", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(3);
+			table.innerHTML = "<tr><td rowspan='2'>aa</td><td>bbbb</td></tr><tr><td>cccc</td></tr>";
+			fitWideTables(root);
+			expect(columnWidths(table)).toEqual(["33.333%", "66.667%"]);
+		} finally {
+			restore();
+		}
+	});
+
+	it("keeps a narrow column from collapsing", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(4);
+			const longCell = "y".repeat(100);
+			table.innerHTML = `<tr><td>a</td><td>${longCell}</td></tr>`;
+			fitWideTables(root);
+			const widths = columnWidths(table).map((width) => Number.parseFloat(width));
+			expect(widths[0]).toBeGreaterThan(7);
+			expect(widths[0]).toBeLessThan(9);
+			expect((widths[0] ?? 0) + (widths[1] ?? 0)).toBeCloseTo(100, 2);
+		} finally {
+			restore();
 		}
 	});
 });
