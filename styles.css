@@ -544,8 +544,8 @@ img.__canvas__ {
 	padding: 1px 3px;
 	min-width: 0;
 	white-space: normal;
-	overflow-wrap: anywhere;
-	word-break: break-word;
+	overflow-wrap: break-word;
+	word-break: normal;
 }
 .print.pagina-print.pagina-cheat-sheet :is(th, td) :is(img, svg, video, canvas, mjx-container, .katex, .math) {
 	max-width: 100%;

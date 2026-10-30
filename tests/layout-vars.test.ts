@@ -144,7 +144,8 @@ describe("exam cheat sheet", () => {
 			"--pagina-cheat-font-size",
 			"--table-text-size: 1em",
 			"table-layout: fixed",
-			"overflow-wrap: anywhere",
+			"overflow-wrap: break-word",
+			"word-break: normal",
 			"page-break-inside: auto",
 			"page-break-after: avoid",
 			"padding: 0",
@@ -417,13 +418,15 @@ describe("cheat sheet table fit", () => {
 			expect(root.querySelector(".pagina-table-fit")).toBeNull();
 			expect(Number.isNaN(zoom.value())).toBe(true);
 			expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+			expect(table.classList.contains("pagina-table-natural")).toBe(false);
 			expect(table.classList.contains("pagina-table-full")).toBe(true);
-			// "Storage Tier" is 12 characters and "Architectural Unit" is 18.
-			expect(columnWidths(table)).toEqual(["40%", "60%"]);
+			expect(table.style.width).toBe("");
+			// Longest words are "Storage" (7) and "Architectural" (13), not the full headings.
+			expect(columnWidths(table)).toEqual(["35%", "65%"]);
 			for (const cell of table.querySelectorAll("th")) {
 				expect(cell.style.whiteSpace).toBe("normal");
-				expect(cell.style.overflowWrap).toBe("anywhere");
-				expect(cell.style.wordBreak).toBe("break-word");
+				expect(cell.style.overflowWrap).toBe("break-word");
+				expect(cell.style.wordBreak).toBe("normal");
 				expect(cell.style.minWidth).toBe("");
 			}
 		} finally {
@@ -462,6 +465,29 @@ describe("cheat sheet table fit", () => {
 		fitWideTables(root);
 		expect(root.querySelector(".pagina-table-fit")).toBeNull();
 		expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+	});
+
+	it("gives a short label its longest word when the other columns are sentences", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(3);
+			table.innerHTML = [
+				"<tr><th>Operator</th><th>Description</th><th>Purpose / Impact</th></tr>",
+				"<tr><td>Shuffle / Exchange</td>",
+				"<td>Redistributes data across cluster worker nodes so rows with the same key reside on the same node.</td>",
+				"<td>Essential for distributed joins and aggregations, but introduces high network I/O cost.</td></tr>",
+				"<tr><td>Broadcast Join</td><td>Replicates a small dataset.</td><td>Eliminates expensive network shuffles.</td></tr>",
+				"<tr><td>Window Functions</td><td>Computes rolling metrics.</td><td>Analytical processing.</td></tr>",
+			].join("");
+			fitWideTables(root);
+			expect(root.querySelector(".pagina-table-fit")).toBeNull();
+			expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+			expect(table.classList.contains("pagina-table-full")).toBe(true);
+			// Longest tokens: Broadcast (9), Redistributes (13), "aggregations," (13).
+			expect(columnWidths(table)).toEqual(["25.714%", "37.143%", "37.143%"]);
+		} finally {
+			restore();
+		}
 	});
 
 	it("splits a spanning cell across the columns it covers", () => {

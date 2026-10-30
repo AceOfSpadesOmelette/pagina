@@ -91,8 +91,8 @@ export const CHEAT_SHEET_CSS = `
   padding: 1px 3px;
   min-width: 0;
   white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .print.pagina-print.pagina-cheat-sheet :is(th, td) :is(img, svg, video, canvas, mjx-container, .katex, .math) {
   max-width: 100%;
@@ -463,7 +463,7 @@ function parsePx(value: string): number {
 }
 
 /** Width of the cell's contents on one line, without the cell's own padding. */
-function measureNowrapText(cell: HTMLElement): number {
+function measureNowrapText(cell: HTMLElement, word?: string): number {
 	const doc = cell.ownerDocument;
 	const host = doc.body;
 	if (!host) return 0;
@@ -495,9 +495,45 @@ function measureNowrapText(cell: HTMLElement): number {
 	for (const node of Array.from(cell.childNodes)) {
 		probe.appendChild(node.cloneNode(true));
 	}
+	if (word) keepLongestWord(probe, word);
 	const width = probe.getBoundingClientRect().width;
 	probe.remove();
 	return width;
+}
+
+function longestWord(text: string): string {
+	let longest = "";
+	for (const word of text.split(/\s+/)) {
+		if (word.length > longest.length) longest = word;
+	}
+	return longest;
+}
+
+/** Leave `word` in the text node that contained it, so bold or italic still applies. */
+function keepLongestWord(root: HTMLElement, word: string): void {
+	const texts: Text[] = [];
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	let current = walker.nextNode();
+	while (current) {
+		texts.push(current as Text);
+		current = walker.nextNode();
+	}
+	const host = texts.find((text) => text.data.includes(word)) ?? texts[0];
+	if (!host) {
+		root.textContent = word;
+		return;
+	}
+	for (const text of texts) text.data = text === host ? word : "";
+}
+
+function cellChromeWidth(cell: HTMLElement): number {
+	const cs = getComputedStyle(cell);
+	return (
+		parsePx(cs.paddingLeft) +
+		parsePx(cs.paddingRight) +
+		parsePx(cs.borderLeftWidth) +
+		parsePx(cs.borderRightWidth)
+	);
 }
 
 /**
@@ -589,8 +625,8 @@ function wrapHeaderCell(cell: HTMLElement): void {
 function wrapCheatSheetCell(cell: HTMLElement): void {
 	cell.setCssProps({
 		whiteSpace: "normal",
-		overflowWrap: "anywhere",
-		wordBreak: "break-word",
+		overflowWrap: "break-word",
+		wordBreak: "normal",
 	});
 	cell.style.removeProperty("min-width");
 }
@@ -602,7 +638,8 @@ function wrapCheatSheetCell(cell: HTMLElement): void {
 const CHEAT_SHEET_COLUMN_FLOOR = 0.08;
 
 /**
- * Longest single-line content in each column.
+ * Longest word in each column, plus the cell's horizontal padding.
+ * A full sentence must not widen its column, or a short label is crushed to a few letters.
  * A colspan splits its width across the columns it covers. A rowspan occupies those columns
  * in the following rows so the next cell does not land on top of it.
  */
@@ -621,7 +658,8 @@ function columnContentWeights(table: HTMLTableElement): number[] {
 			while (occupied[rowIndex]?.[column]) column += 1;
 			const colSpan = cell.colSpan > 0 ? cell.colSpan : 1;
 			const rowSpan = cell.rowSpan > 0 ? cell.rowSpan : 1;
-			const share = measureNowrapText(cell) / colSpan;
+			const word = longestWord(cell.textContent ?? "");
+			const share = ((word ? measureNowrapText(cell, word) : 0) + cellChromeWidth(cell)) / colSpan;
 			for (let offset = 0; offset < colSpan; offset++) {
 				const index = column + offset;
 				ensure(index + 1);
@@ -672,7 +710,8 @@ function replaceColumnGroup(table: HTMLTableElement, widths: readonly string[]):
 
 /**
  * Pin a cheat-sheet table to the CSS column. Works for 2, 3, and 4 columns:
- * `width: 100%` with `table-layout: fixed` follows the column box, whatever the count.
+ * `width: 100%` with `table-layout: fixed` follows the column box, whatever the count,
+ * so the table cannot paint into the next cheat-sheet column.
  */
 function pinCheatSheetTable(table: HTMLTableElement): void {
 	for (const cell of table.querySelectorAll<HTMLTableCellElement>("th, td")) {
