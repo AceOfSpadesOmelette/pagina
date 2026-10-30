@@ -1,6 +1,6 @@
 {
 	"name": "pagina",
-	"version": "1.1.5",
+	"version": "1.1.6",
 	"description": "Export notes to PDF on desktop, with page size, margins, headers, and footers.",
 	"main": "main.js",
 	"type": "module",
