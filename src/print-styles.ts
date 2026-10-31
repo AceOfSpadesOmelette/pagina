@@ -275,23 +275,31 @@ ${LIGHT_PRINT_SURFACE_CSS}
 }
 .print.pagina-print .conspectus-toc-entry {
   display: flex;
-  align-items: baseline;
+  align-items: last baseline;
+  column-gap: 4px;
   width: 100%;
 }
-.print.pagina-print .conspectus-toc-leader {
+.print.pagina-print .conspectus-toc-text {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.print.pagina-print .conspectus-toc-text > a {
+  white-space: normal;
+}
+.print.pagina-print .conspectus-toc-leader {
+  display: inline-block;
+  width: 100%;
+  height: 0;
   border-bottom: 1px dotted currentColor;
-  margin-bottom: 0.2em;
   margin-left: 0.35em;
+  margin-right: calc(-100% - 0.35em);
+  vertical-align: baseline;
 }
 .print.pagina-print .conspectus-toc-page {
   flex: 0 0 auto;
-  margin-left: 0.5em;
   white-space: nowrap;
   text-align: right;
-}
-.print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
-  margin-left: auto;
 }
 .print.pagina-print .pagina-forced-break {
   page-break-before: always;
@@ -367,23 +375,31 @@ ${LIGHT_PRINT_SURFACE_CSS}
   }
   .print.pagina-print .conspectus-toc-entry {
     display: flex;
-    align-items: baseline;
+    align-items: last baseline;
+    column-gap: 4px;
     width: 100%;
   }
-  .print.pagina-print .conspectus-toc-leader {
+  .print.pagina-print .conspectus-toc-text {
     flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .print.pagina-print .conspectus-toc-text > a {
+    white-space: normal;
+  }
+  .print.pagina-print .conspectus-toc-leader {
+    display: inline-block;
+    width: 100%;
+    height: 0;
     border-bottom: 1px dotted currentColor;
-    margin-bottom: 0.2em;
     margin-left: 0.35em;
+    margin-right: calc(-100% - 0.35em);
+    vertical-align: baseline;
   }
   .print.pagina-print .conspectus-toc-page {
     flex: 0 0 auto;
-    margin-left: 0.5em;
     white-space: nowrap;
     text-align: right;
-  }
-  .print.pagina-print .conspectus-toc-entry:not(.conspectus-toc-leaders) > .conspectus-toc-page {
-    margin-left: auto;
   }
   .print.pagina-print .pagina-forced-break {
     page-break-before: always;

@@ -19,11 +19,10 @@ export function layoutConspectusPageNumbers(root: ParentNode): void {
 				cls: leaders ? "conspectus-toc-entry conspectus-toc-leaders" : "conspectus-toc-entry",
 			});
 			li.insertBefore(row, linkNode);
-			row.appendChild(linkNode);
-			if (leaders) {
-				const leader = createSpan({ cls: "conspectus-toc-leader" });
-				row.appendChild(leader);
-			}
+			const text = createSpan({ cls: "conspectus-toc-text" });
+			text.appendChild(linkNode);
+			if (leaders) text.appendChild(createSpan({ cls: "conspectus-toc-leader" }));
+			row.appendChild(text);
 			const page = createSpan({ cls: "conspectus-toc-page" });
 			const marker = createEl("a", {
 				cls: "md-print-anchor",

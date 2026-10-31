@@ -42,13 +42,37 @@ describe("conspectus page-number rows", () => {
 		expect(row?.querySelector(".conspectus-toc-page")).not.toBeNull();
 	});
 
+	it("puts the leader and page number after the last word", () => {
+		const root = document.createElement("div");
+		const title =
+			"1.5 Understand requirements for investigation types (i.e., administrative, criminal, civil, regulatory, industry standards).";
+		root.innerHTML = `
+			<div class="conspectus-toc" data-conspectus-page-numbers="1" data-conspectus-leaders="true">
+				<ul>
+					<li class="conspectus-toc-item conspectus-toc-h1">
+						<a class="internal-link" data-heading="Investigation types" href="an://h1-5">${title}</a>
+					</li>
+				</ul>
+			</div>
+		`;
+		layoutConspectusPageNumbers(root);
+		const text = root.querySelector(".conspectus-toc-text");
+		const link = text?.querySelector(":scope > a[data-heading]");
+		expect(link?.textContent).toBe(title);
+		expect(link?.getAttribute("href")).toBe("an://h1-5");
+		expect(root.querySelectorAll(".conspectus-toc-entry a[data-heading]")).toHaveLength(1);
+		expect(text?.nextElementSibling?.classList.contains("conspectus-toc-page")).toBe(true);
+		expect(text?.querySelector(".conspectus-toc-leader")).not.toBeNull();
+		expect(root.querySelector(".conspectus-toc-page a.internal-link")).toBeNull();
+	});
+
 	it("writes the heading page into the reserved column", () => {
 		const root = sample();
 		layoutConspectusPageNumbers(root);
 		fillTocPageNumbers(root, { "h1-3": [4, 700] });
 		const column = root.querySelector(".conspectus-toc-h1 .conspectus-toc-page");
 		expect(column?.textContent).toBe("5");
-		expect(column?.querySelector("a.md-print-anchor")).toBeNull();
+		expect(column?.querySelector("a")).toBeNull();
 		expect(root.querySelector(".conspectus-toc-leader")).not.toBeNull();
 	});
 });
