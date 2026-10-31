@@ -4,15 +4,128 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 /** 9px at 96dpi, the default header and footer size. */
 export const STAMP_SLOT_FONT_PT = 6.75;
 
-/** Width of one header or footer slot. Left, center, and right share the content width equally. */
+/** Width of one header or footer slot when all three are occupied. */
 export function slotColumnWidth(contentWidth: number): number {
 	return Math.max(0, contentWidth) / 3;
 }
 
-/** Left edge of each slot, in the same units as the content box. */
+/** Left edge of each equal third, in the same units as the content box. */
 export function slotLeftEdges(contentLeft: number, contentWidth: number): [number, number, number] {
 	const column = slotColumnWidth(contentWidth);
 	return [contentLeft, contentLeft + column, contentLeft + column * 2];
+}
+
+export interface SlotSpan {
+	/** Width of this slot. */
+	width: number;
+	/** Left edge relative to the content box. */
+	left: number;
+}
+
+/**
+ * Give each occupied slot its third, then let it grow into neighboring empty
+ * slots by only as much as it needs to fit on one line. An empty run passes
+ * through, so an empty left and center are both available to the right.
+ * A filled slot never gives up its own third. Three filled slots stay equal.
+ */
+export function allocateSlotSpans(
+	contentWidth: number,
+	textWidths: readonly [number, number, number],
+	occupied: readonly [boolean, boolean, boolean],
+): [SlotSpan, SlotSpan, SlotSpan] {
+	const width = Math.max(0, contentWidth);
+	const third = width / 3;
+	const widths: [number, number, number] = [third, third, third];
+	const shortfall: [number, number, number] = [0, 0, 0];
+	for (let i = 0; i < 3; i++) {
+		if (!occupied[i]) continue;
+		shortfall[i] = Math.max(0, (textWidths[i] ?? 0) - third);
+	}
+
+	let index = 0;
+	while (index < 3) {
+		if (occupied[index]) {
+			index += 1;
+			continue;
+		}
+		const start = index;
+		while (index < 3 && !occupied[index]) index += 1;
+		grantEmptyRun(widths, shortfall, occupied, start, index - 1);
+	}
+
+	const spans: SlotSpan[] = [];
+	let left = 0;
+	for (let i = 0; i < 3; i++) {
+		const slotWidth = Math.max(0, widths[i] ?? 0);
+		spans.push({ width: slotWidth, left });
+		left += slotWidth;
+	}
+	return [spans[0]!, spans[1]!, spans[2]!];
+}
+
+/** Measure rendered slot text and allocate spans in the same units as `widthOf`. */
+export function slotSpansForTexts(
+	contentWidth: number,
+	texts: readonly [string, string, string],
+	widthOf: (sample: string) => number | null,
+): [SlotSpan, SlotSpan, SlotSpan] {
+	const textWidths: [number, number, number] = [0, 0, 0];
+	const occupied: [boolean, boolean, boolean] = [false, false, false];
+	for (let i = 0; i < 3; i++) {
+		const text = (texts[i] ?? "").trim();
+		if (!text) continue;
+		occupied[i] = true;
+		textWidths[i] = widthOf(text) ?? text.length;
+	}
+	return allocateSlotSpans(contentWidth, textWidths, occupied);
+}
+
+function grantEmptyRun(
+	widths: [number, number, number],
+	shortfall: [number, number, number],
+	occupied: readonly [boolean, boolean, boolean],
+	start: number,
+	end: number,
+): void {
+	const leftNeighbor = start > 0 && occupied[start - 1] ? start - 1 : -1;
+	const rightNeighbor = end < 2 && occupied[end + 1] ? end + 1 : -1;
+	const claimants: number[] = [];
+	if (leftNeighbor >= 0 && (shortfall[leftNeighbor] ?? 0) > 0) claimants.push(leftNeighbor);
+	if (rightNeighbor >= 0 && (shortfall[rightNeighbor] ?? 0) > 0) claimants.push(rightNeighbor);
+	if (claimants.length === 0) return;
+
+	const pool = widths.slice(start, end + 1).reduce((sum, value) => sum + value, 0);
+	const need = claimants.reduce((sum, i) => sum + (shortfall[i] ?? 0), 0);
+	if (!(pool > 0) || !(need > 0)) return;
+
+	const grants = new Map<number, number>();
+	for (const i of claimants) {
+		const share = need <= pool ? (shortfall[i] ?? 0) : (pool * (shortfall[i] ?? 0)) / need;
+		grants.set(i, share);
+	}
+
+	let grantLeft = leftNeighbor >= 0 ? (grants.get(leftNeighbor) ?? 0) : 0;
+	let grantRight = rightNeighbor >= 0 ? (grants.get(rightNeighbor) ?? 0) : 0;
+	for (let i = start; i <= end && grantLeft > 0; i++) {
+		const take = Math.min(widths[i] ?? 0, grantLeft);
+		widths[i] = (widths[i] ?? 0) - take;
+		grantLeft -= take;
+	}
+	for (let i = end; i >= start && grantRight > 0; i--) {
+		const take = Math.min(widths[i] ?? 0, grantRight);
+		widths[i] = (widths[i] ?? 0) - take;
+		grantRight -= take;
+	}
+	if (leftNeighbor >= 0) {
+		const grant = grants.get(leftNeighbor) ?? 0;
+		widths[leftNeighbor] = (widths[leftNeighbor] ?? 0) + grant;
+		shortfall[leftNeighbor] = Math.max(0, (shortfall[leftNeighbor] ?? 0) - grant);
+	}
+	if (rightNeighbor >= 0) {
+		const grant = grants.get(rightNeighbor) ?? 0;
+		widths[rightNeighbor] = (widths[rightNeighbor] ?? 0) + grant;
+		shortfall[rightNeighbor] = Math.max(0, (shortfall[rightNeighbor] ?? 0) - grant);
+	}
 }
 
 /**
@@ -51,14 +164,20 @@ export function wrapSlotText(
 	return lines;
 }
 
-/** How many lines the widest slot needs. A displayed edge always keeps at least one. */
+/**
+ * How many lines the tallest slot needs. A displayed edge always keeps at least one.
+ * Pass one width to measure every slot at that width, or one width per slot.
+ */
 export function slotLineCount(
 	texts: readonly string[],
 	widthOf: (sample: string) => number | null,
-	columnWidth: number,
+	columnWidth: number | readonly number[],
 ): number {
 	let count = 1;
-	for (const text of texts) count = Math.max(count, wrapSlotText(text, widthOf, columnWidth).length);
+	for (let i = 0; i < texts.length; i++) {
+		const width = typeof columnWidth === "number" ? columnWidth : (columnWidth[i] ?? 0);
+		count = Math.max(count, wrapSlotText(texts[i] ?? "", widthOf, width).length);
+	}
 	return count;
 }
 

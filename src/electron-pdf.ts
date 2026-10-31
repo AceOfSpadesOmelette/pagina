@@ -6,6 +6,7 @@ import { borderSvg } from "./header-borders";
 import { emMm, lineMm, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
 import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { slotSpansForTexts } from "./slot-wrap";
 import { formatTimestamp, renderTemplate, type VariableContext } from "./variables";
 
 interface IpcRendererLike {
@@ -178,6 +179,26 @@ function cssFontFamily(value: string | undefined, fallback: string): string {
 	return names.map((name) => `'${name.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`).join(", ");
 }
 
+function widthOfCssFont(
+	fontFamily: string,
+	fontPx: number,
+): (text: string) => number | null {
+	const fallback = (text: string) => text.length * fontPx * 0.5;
+	if (typeof document === "undefined") return fallback;
+	const canvas = document.createElement("canvas");
+	const context = canvas.getContext("2d");
+	if (!context) return fallback;
+	context.font = `${fontPx}px ${fontFamily}`;
+	return (text: string) => {
+		try {
+			const width = context.measureText(text).width;
+			return Number.isFinite(width) ? width : fallback(text);
+		} catch {
+			return fallback(text);
+		}
+	};
+}
+
 function headerFooterHtml(
 	slots: {
 		left: string;
@@ -197,6 +218,7 @@ function headerFooterHtml(
 	noteFont: string,
 	omitText: boolean,
 	lines: number,
+	contentWidthPx: number,
 ): string {
 	const left = omitText ? "" : chromiumSlot(slots.left, ctx, slots.datetimeFormat);
 	const center = omitText ? "" : chromiumSlot(slots.center, ctx, slots.datetimeFormat);
@@ -213,10 +235,25 @@ function headerFooterHtml(
 	const alignItems = edge === "header" ? "flex-start" : "flex-end";
 	const ruleHtml = rule ? `<div style="width:100%;line-height:0;">${rule}</div>` : "";
 	const gapHtml = rule ? `<div style="height:${gapPx}px;line-height:0;font-size:0;"></div>` : "";
-	const slot = (align: string, text: string) =>
-		`<div style="flex:1;min-width:0;height:${rowPx}px;line-height:${linePx}px;font-size:${emPx}px;overflow:hidden;white-space:normal;word-break:break-word;text-align:${align};">${text}</div>`;
+	const measureCtx: VariableContext = {
+		...ctx,
+		page: 999,
+		pages: 999,
+		datetimeFormat: slots.datetimeFormat,
+	};
+	const measured = (
+		omitText
+			? ["", "", ""]
+			: [slots.left, slots.center, slots.right].map((template) => renderTemplate(template, measureCtx))
+	) as [string, string, string];
+	const spans = slotSpansForTexts(contentWidthPx, measured, widthOfCssFont(fontFamily, emPx));
+	const percents = spans.map((span) =>
+		contentWidthPx > 0 ? Math.round((span.width / contentWidthPx) * 1000) / 10 : 100 / 3,
+	);
+	const slot = (align: string, text: string, percent: number) =>
+		`<div style="flex:0 0 ${percent}%;width:${percent}%;min-width:0;height:${rowPx}px;line-height:${linePx}px;font-size:${emPx}px;overflow:hidden;white-space:normal;overflow-wrap:break-word;word-break:normal;text-align:${align};">${text}</div>`;
 	const row = `<div style="width:100%;height:${rowPx}px;display:flex;align-items:${alignItems};overflow:hidden;">
-${slot("left", left)}${slot("center", center)}${slot("right", right)}
+${slot("left", left, percents[0] ?? 0)}${slot("center", center, percents[1] ?? 0)}${slot("right", right, percents[2] ?? 0)}
 </div>`;
 	if (omitText && !rule) return "<span></span>";
 	const body = edge === "header" ? `${row}${gapHtml}${ruleHtml}` : `${ruleHtml}${gapHtml}${row}`;
@@ -264,6 +301,7 @@ export function makeElectronPrintOptions(
 	}
 	const noteFont = obsidianTextFont(noteRoot);
 	const toIn = (mm: number) => mm / 25.4;
+	const contentWidthPx = mmToCssPx(Math.max(0, page.width - margins.left - margins.right));
 	const scale = Math.min(2, Math.max(0.01, settings.downscalePercent / 100));
 
 	return {
@@ -293,6 +331,7 @@ export function makeElectronPrintOptions(
 					noteFont,
 					Boolean(extras?.headerOmitText),
 					Math.max(1, extras?.headerLines ?? 1),
+					contentWidthPx,
 				)
 			: "<span></span>",
 		footerTemplate: settings.displayFooter
@@ -305,6 +344,7 @@ export function makeElectronPrintOptions(
 					noteFont,
 					Boolean(extras?.footerOmitText),
 					Math.max(1, extras?.footerLines ?? 1),
+					contentWidthPx,
 				)
 			: "<span></span>",
 	};

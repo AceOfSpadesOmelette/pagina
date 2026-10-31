@@ -2,7 +2,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
 import { resolvePrintMarginsMm } from "./page-presets";
-import { slotColumnWidth, slotLeftEdges, wrapSlotText } from "./slot-wrap";
+import { slotSpansForTexts, wrapSlotText } from "./slot-wrap";
 import { clampSlotFontSize, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
 
@@ -118,8 +118,6 @@ function drawEdge(
 	const width = page.getWidth();
 	const left = mm(margins.left);
 	const content = Math.max(0, width - mm(margins.left) - mm(margins.right));
-	const col = slotColumnWidth(content);
-	const [leftSlot, centerSlot, rightSlot] = slotLeftEdges(left, content);
 	const color = parseColor(slots.textColor || "#555555");
 	const fontPt = clampSlotFontSize(slots.fontSizePt);
 	const lineAdvance = mm(lineMm(fontPt));
@@ -130,8 +128,16 @@ function drawEdge(
 			return null;
 		}
 	};
-	const draw = (template: string, slotLeft: number, align: "left" | "center" | "right") => {
-		const lines = wrapSlotText(renderTemplate(template, slotCtx), widthOf, col);
+	const texts = [slots.left, slots.center, slots.right].map((template) =>
+		renderTemplate(template, slotCtx),
+	) as [string, string, string];
+	const spans = slotSpansForTexts(content, texts, widthOf);
+	const draw = (
+		text: string,
+		span: { width: number; left: number },
+		align: "left" | "center" | "right",
+	) => {
+		const lines = wrapSlotText(text, widthOf, span.width);
 		lines.forEach((line, index) => {
 			let textWidth = 0;
 			try {
@@ -139,16 +145,17 @@ function drawEdge(
 			} catch {
 				return;
 			}
+			const slotLeft = left + span.left;
 			let x = slotLeft;
-			if (align === "center") x = slotLeft + (col - textWidth) / 2;
-			if (align === "right") x = slotLeft + col - textWidth;
+			if (align === "center") x = slotLeft + (span.width - textWidth) / 2;
+			if (align === "right") x = slotLeft + span.width - textWidth;
 			const y = edge === "header" ? baseline - index * lineAdvance : baseline + index * lineAdvance;
 			page.drawText(line, { x, y, size: fontPt, font, color });
 		});
 	};
-	draw(slots.left, leftSlot, "left");
-	draw(slots.center, centerSlot, "center");
-	draw(slots.right, rightSlot, "right");
+	draw(texts[0], spans[0], "left");
+	draw(texts[1], spans[1], "center");
+	draw(texts[2], spans[2], "right");
 }
 
 function parseColor(hex: string): ReturnType<typeof rgb> {

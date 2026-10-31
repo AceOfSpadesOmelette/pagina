@@ -13,6 +13,7 @@ import {
 	fitWideTables,
 	headerLineFits,
 	PRINT_CSS,
+	shiftWordDeficits,
 } from "../src/print-styles";
 import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
@@ -474,11 +475,74 @@ describe("cheat sheet table fit", () => {
 			const { root, table } = mountTable(null);
 			fitWideTables(root);
 			expect(root.querySelector(".pagina-table-fit")).toBeNull();
-			expect(table.classList.contains("pagina-table-fixed")).toBe(false);
+			expect(table.classList.contains("pagina-table-fixed")).toBe(true);
 			expect(table.classList.contains("pagina-table-full")).toBe(true);
+			// "Storage Tier" is 12 characters and "Architectural Unit" is 18.
+			expect(columnWidths(table)).toEqual(["40%", "60%"]);
 			for (const cell of table.querySelectorAll("th")) {
 				expect(cell.style.whiteSpace).toBe("nowrap");
 			}
+		} finally {
+			restore();
+		}
+	});
+
+	it("gives a short first column less than half of a normal table", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(null);
+			table.innerHTML = [
+				"<tr><th>API</th><th>Description</th></tr>",
+				"<tr><td>API</td>",
+				"<td>A long sentence that explains the term in detail and should take the rest of the row.</td></tr>",
+			].join("");
+			fitWideTables(root);
+			expect(table.classList.contains("pagina-table-fixed")).toBe(true);
+			const first = Number.parseFloat(columnWidths(table)[0] ?? "");
+			expect(first).toBeLessThan(25);
+		} finally {
+			restore();
+		}
+	});
+
+	it("moves one letter of width onto a short column from a neighbor above its floor", () => {
+		const letter = 7;
+		expect(shiftWordDeficits([120, 680], [letter, 0], [120, 80])).toEqual([120 + letter, 680 - letter]);
+		expect(shiftWordDeficits([120, 80], [letter, 0], [120, 80])).toEqual([120, 80]);
+	});
+
+	it("gives a longer description more width than a multi-word role", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(null);
+			const role = "Owners / Controllers / Functional Leaders";
+			table.innerHTML = [
+				"<tr><th>Role</th><th>Accountability</th></tr>",
+				`<tr><td>${role}</td>`,
+				"<td>Accountable for ensuring that appropriate security controls are implemented to protect the organization assets and for determining classification levels.</td></tr>",
+			].join("");
+			fitWideTables(root);
+			const widths = columnWidths(table).map((width) => Number.parseFloat(width));
+			const oneLine = ((role.length * 10) / HOST_WIDTH) * 100;
+			expect(widths[0]).toBeLessThan(oneLine);
+			expect(widths[1]).toBeGreaterThan(widths[0] ?? 0);
+		} finally {
+			restore();
+		}
+	});
+
+	it("keeps a normal column at least as wide as its longest word", () => {
+		const restore = mockHeaderTextWidth(10);
+		try {
+			const { root, table } = mountTable(null);
+			table.innerHTML = [
+				"<tr><th>Authenticity</th><th>Meaning</th></tr>",
+				"<tr><td>Authenticity</td>",
+				"<td>Proves assets are legitimate and bona fide, and verifies that they are trusted and verified.</td></tr>",
+			].join("");
+			fitWideTables(root);
+			const first = Number.parseFloat(columnWidths(table)[0] ?? "");
+			expect(first).toBeGreaterThanOrEqual((("Authenticity".length * 10) / HOST_WIDTH) * 100);
 		} finally {
 			restore();
 		}

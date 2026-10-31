@@ -299,8 +299,8 @@
 	.print.pagina-print table th,
 	.print.pagina-print table td {
 		white-space: normal;
-		overflow-wrap: anywhere;
-		word-break: break-word;
+		overflow-wrap: break-word;
+		word-break: normal;
 	}
 	.print.pagina-print table.pagina-table-compact th,
 	.print.pagina-print table.pagina-table-compact td {
@@ -443,8 +443,8 @@
 .print.pagina-print table th,
 .print.pagina-print table td {
 	white-space: normal;
-	overflow-wrap: anywhere;
-	word-break: break-word;
+	overflow-wrap: break-word;
+	word-break: normal;
 }
 .print.pagina-print table.pagina-table-compact th,
 .print.pagina-print table.pagina-table-compact td {
@@ -666,6 +666,9 @@ img.__canvas__ {
 .pagina-table-full {
 	width: 100%;
 	max-width: 100%;
+}
+.pagina-table-fixed {
+	table-layout: fixed;
 }
 .pagina-table-min-content {
 	width: min-content;

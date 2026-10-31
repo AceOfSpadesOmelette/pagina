@@ -162,11 +162,14 @@ ${LIGHT_PRINT_SURFACE_CSS}
   max-width: 100%;
   page-break-inside: auto;
 }
+.print.pagina-print table.pagina-table-fixed {
+  table-layout: fixed;
+}
 .print.pagina-print table th,
 .print.pagina-print table td {
   white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 .print.pagina-print table.pagina-table-compact th,
 .print.pagina-print table.pagina-table-compact td {
@@ -675,6 +678,164 @@ function columnContentWeights(table: HTMLTableElement): number[] {
 	return weights;
 }
 
+/** A label with no whitespace. A phrase, a paragraph, or a colspan is not one. */
+function isSingleWord(text: string): boolean {
+	return text.length > 0 && !/\s/.test(text);
+}
+
+/**
+ * Full nowrap width and longest-word width of each column, plus cell padding.
+ * `singleWord` is true when the cell that set that column's one-line width is a
+ * single word. A colspan does not count. A rowspan occupies those columns in the
+ * following rows so the next cell does not land on top of it.
+ */
+function columnSizeWeights(table: HTMLTableElement): {
+	preferred: number[];
+	floor: number[];
+	singleWord: boolean[];
+} {
+	const rows = Array.from(table.rows);
+	const occupied: boolean[][] = rows.map(() => []);
+	const preferred: number[] = [];
+	const floor: number[] = [];
+	const singleWord: boolean[] = [];
+	const ensure = (count: number) => {
+		while (preferred.length < count) {
+			preferred.push(0);
+			floor.push(0);
+			singleWord.push(false);
+		}
+	};
+	for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+		const row = rows[rowIndex];
+		if (!row) continue;
+		let column = 0;
+		for (const cell of Array.from(row.cells)) {
+			while (occupied[rowIndex]?.[column]) column += 1;
+			const colSpan = cell.colSpan > 0 ? cell.colSpan : 1;
+			const rowSpan = cell.rowSpan > 0 ? cell.rowSpan : 1;
+			const text = (cell.textContent ?? "").trim();
+			const word = longestWord(text);
+			const chrome = cellChromeWidth(cell);
+			const fullShare = ((text ? measureNowrapText(cell) : 0) + chrome) / colSpan;
+			const wordShare =
+				((word ? measureNowrapText(cell, word) : 0) + chrome + HEADER_LINE_SLOP_PX) / colSpan;
+			const wordCell = colSpan === 1 && isSingleWord(text);
+			for (let offset = 0; offset < colSpan; offset++) {
+				const index = column + offset;
+				ensure(index + 1);
+				if (fullShare > (preferred[index] ?? 0)) {
+					preferred[index] = fullShare;
+					singleWord[index] = wordCell;
+				} else if (fullShare > 0 && fullShare === (preferred[index] ?? 0) && !wordCell) {
+					singleWord[index] = false;
+				}
+				if (wordShare > (floor[index] ?? 0)) floor[index] = wordShare;
+				for (let down = 0; down < rowSpan && rowIndex + down < rows.length; down++) {
+					const slot = occupied[rowIndex + down];
+					if (slot) slot[index] = true;
+				}
+			}
+			column += colSpan;
+		}
+	}
+	return { preferred, floor, singleWord };
+}
+
+/**
+ * Percent widths for a normal-mode table.
+ * When every column fits on one line, each keeps that width and leftover is
+ * shared by content. Otherwise only a single-word column keeps one line.
+ * Phrases and paragraphs split what remains by their one-line text, and none
+ * drops below its longest word.
+ */
+function readingColumnPercents(
+	preferred: readonly number[],
+	floor: readonly number[],
+	singleWord: readonly boolean[],
+	available: number,
+): number[] {
+	const count = preferred.length;
+	if (count === 0) return [];
+	const prefs = preferred.map((value, index) => Math.max(0, value, floor[index] ?? 0));
+	const floors = prefs.map((value, index) => Math.min(value, Math.max(0, floor[index] ?? 0)));
+	const prefSum = prefs.reduce((sum, value) => sum + value, 0);
+	if (!(available > 0) || !(prefSum > 0)) return Array.from({ length: count }, () => 100 / count);
+
+	const floorSum = floors.reduce((sum, value) => sum + value, 0);
+	if (floorSum >= available) return toPercents(scaleTo(floors, available));
+
+	if (prefSum <= available + 0.5) {
+		const leftover = Math.max(0, available - prefSum);
+		if (leftover <= 0) return toPercents(prefs);
+		return toPercents(prefs.map((value) => value + (leftover * value) / prefSum));
+	}
+
+	const locked = new Array<boolean>(count).fill(false);
+	const order = prefs
+		.map((_, index) => index)
+		.sort((a, b) => (prefs[a] ?? 0) - (prefs[b] ?? 0) || a - b);
+	for (const index of order) {
+		if (!singleWord[index]) continue;
+		let lockedSum = 0;
+		let otherFloors = 0;
+		for (let i = 0; i < count; i++) {
+			if (locked[i]) lockedSum += prefs[i] ?? 0;
+			else if (i !== index) otherFloors += floors[i] ?? 0;
+		}
+		if (lockedSum + (prefs[index] ?? 0) + otherFloors <= available + 0.5) locked[index] = true;
+	}
+
+	const widths = new Array<number>(count).fill(0);
+	let lockedWidth = 0;
+	const unlocked: number[] = [];
+	for (let i = 0; i < count; i++) {
+		if (locked[i]) {
+			widths[i] = prefs[i] ?? 0;
+			lockedWidth += prefs[i] ?? 0;
+		} else {
+			unlocked.push(i);
+		}
+	}
+	const rest = Math.max(0, available - lockedWidth);
+	const shared = shareAboveFloors(
+		unlocked.map((index) => prefs[index] ?? 0),
+		unlocked.map((index) => floors[index] ?? 0),
+		rest,
+	);
+	for (let i = 0; i < unlocked.length; i++) widths[unlocked[i] ?? 0] = shared[i] ?? 0;
+	return toPercents(widths);
+}
+
+/** Give each column its floor, then share leftover in proportion to one-line text. */
+function shareAboveFloors(prefs: readonly number[], floors: readonly number[], budget: number): number[] {
+	const count = prefs.length;
+	if (count === 0) return [];
+	const base = floors.map((value) => Math.max(0, value));
+	const baseSum = base.reduce((sum, value) => sum + value, 0);
+	if (!(budget > 0)) return base.map(() => 0);
+	if (baseSum >= budget) return scaleTo(base, budget);
+	const leftover = budget - baseSum;
+	const prefSum = prefs.reduce((sum, value) => sum + Math.max(0, value), 0);
+	if (!(prefSum > 0)) {
+		const share = leftover / count;
+		return base.map((value) => value + share);
+	}
+	return base.map((value, index) => value + (leftover * Math.max(0, prefs[index] ?? 0)) / prefSum);
+}
+
+function scaleTo(values: readonly number[], available: number): number[] {
+	const total = values.reduce((sum, value) => sum + Math.max(0, value), 0);
+	if (!(total > 0)) return values.map(() => available / Math.max(1, values.length));
+	return values.map((value) => (Math.max(0, value) / total) * available);
+}
+
+function toPercents(widths: readonly number[]): number[] {
+	const total = widths.reduce((sum, value) => sum + Math.max(0, value), 0);
+	if (!(total > 0)) return widths.map(() => 100 / Math.max(1, widths.length));
+	return widths.map((value) => (Math.max(0, value) / total) * 100);
+}
+
 /** Percent widths that sum to 100. Equal shares when nothing could be measured. */
 function columnPercents(weights: readonly number[]): number[] {
 	const count = weights.length;
@@ -720,6 +881,133 @@ function pinCheatSheetTable(table: HTMLTableElement): void {
 	replaceColumnGroup(table, formatColumnWidths(columnPercents(columnContentWeights(table))));
 	stretchTable(table);
 	table.classList.add("pagina-table-fixed");
+}
+
+/** One extra pixel so subpixel rounding does not wrap the last glyph. */
+const WORD_DEFICIT_EXTRA_PX = 1;
+
+/**
+ * Give a column that is still short of its longest word the missing pixels.
+ * Those pixels come from the other column furthest above its longest-word floor.
+ * A column that is itself short, or already on its floor, is not a donor.
+ * The total width stays the same.
+ */
+export function shiftWordDeficits(
+	widths: readonly number[],
+	deficits: readonly number[],
+	floors: readonly number[],
+): number[] {
+	const next = widths.map((value) => Math.max(0, value));
+	const count = next.length;
+	for (let index = 0; index < count; index++) {
+		const deficit = deficits[index] ?? 0;
+		if (!(deficit > 0)) continue;
+		let donor = -1;
+		let spare = 0;
+		for (let other = 0; other < count; other++) {
+			if (other === index || (deficits[other] ?? 0) > 0) continue;
+			const room = (next[other] ?? 0) - Math.max(0, floors[other] ?? 0);
+			if (room > spare) {
+				spare = room;
+				donor = other;
+			}
+		}
+		if (donor < 0) continue;
+		const move = Math.min(deficit, spare);
+		next[index] = (next[index] ?? 0) + move;
+		next[donor] = (next[donor] ?? 0) - move;
+	}
+	return next;
+}
+
+/**
+ * How many pixels each column is still short of its longest word, plus one.
+ * Compared with the cell content box after the columns have been applied.
+ * A colspan is skipped. A zero `clientWidth` means the cell was not laid out.
+ * Returns null when nothing was laid out, so a headless test does not invent a deficit.
+ */
+function columnWordDeficits(table: HTMLTableElement, columnCount: number): number[] | null {
+	if (columnCount === 0) return null;
+	const deficits = new Array<number>(columnCount).fill(0);
+	let measured = false;
+	const rows = Array.from(table.rows);
+	const occupied: boolean[][] = rows.map(() => []);
+	for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+		const row = rows[rowIndex];
+		if (!row) continue;
+		let column = 0;
+		for (const cell of Array.from(row.cells)) {
+			while (occupied[rowIndex]?.[column]) column += 1;
+			const colSpan = cell.colSpan > 0 ? cell.colSpan : 1;
+			const rowSpan = cell.rowSpan > 0 ? cell.rowSpan : 1;
+			if (colSpan === 1 && column < columnCount) {
+				const box = cell.clientWidth;
+				if (box > 0) {
+					measured = true;
+					const cs = getComputedStyle(cell);
+					const content = Math.max(0, box - parsePx(cs.paddingLeft) - parsePx(cs.paddingRight));
+					const word = longestWord((cell.textContent ?? "").trim());
+					const wordWidth = word ? measureNowrapText(cell, word) : 0;
+					if (wordWidth > content) {
+						const shortfall = wordWidth - content + WORD_DEFICIT_EXTRA_PX;
+						if (shortfall > (deficits[column] ?? 0)) deficits[column] = shortfall;
+					}
+				}
+			}
+			for (let offset = 0; offset < colSpan; offset++) {
+				for (let down = 0; down < rowSpan && rowIndex + down < rows.length; down++) {
+					const slot = occupied[rowIndex + down];
+					if (slot) slot[column + offset] = true;
+				}
+			}
+			column += colSpan;
+		}
+	}
+	return measured ? deficits : null;
+}
+
+function columnSharePixels(table: HTMLTableElement, layoutWidth: number): number[] {
+	return [...table.querySelectorAll("col")].map((col) => {
+		const share = Number.parseFloat(col.style.width);
+		return Number.isFinite(share) ? (share / 100) * layoutWidth : 0;
+	});
+}
+
+/** Wrap a header whose column is still narrower than the single-line label. */
+function wrapTightHeaders(table: HTMLTableElement, layoutWidth: number): void {
+	preferSingleLineHeaders(table, layoutWidth);
+	const shares = [...table.querySelectorAll("col")].map((col) => Number.parseFloat(col.style.width));
+	for (const entry of headerEntries(table)) {
+		const share = shares[entry.column];
+		if (!entry.lockable || share == null || !Number.isFinite(share)) continue;
+		const columnWidth = (share / 100) * layoutWidth;
+		if (entry.outerWidth > columnWidth + HEADER_LINE_SLOP_PX) wrapHeaderCell(entry.cell);
+	}
+}
+
+/**
+ * Size a normal-mode table from the full nowrap width of each column.
+ * Percents use the table's own width. The preview box is wider by its padding,
+ * and a percent of that wider box leaves the cell about a glyph short.
+ */
+function pinReadingTable(table: HTMLTableElement, availableWidth: number): void {
+	void table.offsetWidth;
+	const layoutWidth = table.clientWidth > 0 ? table.clientWidth : availableWidth;
+	const { preferred, floor, singleWord } = columnSizeWeights(table);
+	replaceColumnGroup(
+		table,
+		formatColumnWidths(readingColumnPercents(preferred, floor, singleWord, layoutWidth)),
+	);
+	stretchTable(table);
+	table.classList.add("pagina-table-fixed");
+	wrapTightHeaders(table, layoutWidth);
+	void table.offsetWidth;
+	const shares = columnSharePixels(table, layoutWidth);
+	const deficits = columnWordDeficits(table, shares.length);
+	if (!deficits || !deficits.some((value) => value > 0)) return;
+	const shifted = shiftWordDeficits(shares, deficits, floor);
+	replaceColumnGroup(table, formatColumnWidths(toPercents(shifted)));
+	wrapTightHeaders(table, layoutWidth);
 }
 
 /**
@@ -807,7 +1095,7 @@ export function fitWideTables(root: HTMLElement): void {
 
 		let needed = tableMinContentWidth(table);
 		if (needed <= hostWidth + TABLE_FIT_SLOP_PX) {
-			stretchTable(table);
+			pinReadingTable(table, hostWidth);
 			return;
 		}
 

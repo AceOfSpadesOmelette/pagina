@@ -1,6 +1,13 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { effectiveVerticalMargins, LINE_MM, requiredMarginMm } from "../src/header-footer-layout";
-import { slotColumnWidth, slotLeftEdges, slotLineCount, STAMP_SLOT_FONT_PT, wrapSlotText } from "../src/slot-wrap";
+import {
+	allocateSlotSpans,
+	slotColumnWidth,
+	slotLeftEdges,
+	slotLineCount,
+	STAMP_SLOT_FONT_PT,
+	wrapSlotText,
+} from "../src/slot-wrap";
 
 describe("header and footer slots", () => {
 	it("gives the left, center, and right slots equal thirds", () => {
@@ -11,6 +18,56 @@ describe("header and footer slots", () => {
 		expect(edges[1]! - edges[0]!).toBeCloseTo(column);
 		expect(edges[2]! - edges[1]!).toBeCloseTo(column);
 		expect(10 + content - edges[2]!).toBeCloseTo(column);
+	});
+
+	it("keeps three occupied slots at equal thirds", () => {
+		const spans = allocateSlotSpans(180, [200, 200, 200], [true, true, true]);
+		expect(spans.map((span) => span.width)).toEqual([60, 60, 60]);
+		expect(spans.map((span) => span.left)).toEqual([0, 60, 120]);
+	});
+
+	it("grows the right slot into an empty center and keeps it on the right edge", () => {
+		const spans = allocateSlotSpans(180, [20, 0, 100], [true, false, true]);
+		expect(spans[0]!.width).toBeCloseTo(60);
+		expect(spans[0]!.left).toBeCloseTo(0);
+		expect(spans[1]!.width).toBeCloseTo(20);
+		expect(spans[2]!.width).toBeCloseTo(100);
+		expect(spans[2]!.left).toBeCloseTo(80);
+		expect(spans[2]!.left + spans[2]!.width).toBeCloseTo(180);
+	});
+
+	it("splits an empty center between both sides by how much each is short", () => {
+		const spans = allocateSlotSpans(180, [100, 0, 110], [true, false, true]);
+		expect(spans[0]!.width).toBeCloseTo(60 + (60 * 40) / 90);
+		expect(spans[2]!.width).toBeCloseTo(60 + (60 * 50) / 90);
+		expect(spans[1]!.width).toBeCloseTo(0);
+		expect(spans[2]!.left).toBeCloseTo(spans[0]!.width);
+		expect(spans[2]!.left + spans[2]!.width).toBeCloseTo(180);
+	});
+
+	it("does not let a filled center take space from a short left slot", () => {
+		const spans = allocateSlotSpans(180, [10, 200, 0], [true, true, false]);
+		expect(spans[0]!.width).toBeCloseTo(60);
+		expect(spans[0]!.left).toBeCloseTo(0);
+		expect(spans[1]!.width).toBeCloseTo(120);
+		expect(spans[2]!.width).toBeCloseTo(0);
+	});
+
+	it("passes an empty left and center through to the right slot", () => {
+		const spans = allocateSlotSpans(180, [0, 0, 100], [false, false, true]);
+		expect(spans[2]!.width).toBeCloseTo(100);
+		expect(spans[2]!.left).toBeCloseTo(80);
+		expect(spans[0]!.width + spans[1]!.width + spans[2]!.width).toBeCloseTo(180);
+	});
+
+	it("counts lines from each slot's own width", async () => {
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		const widthOf = (text: string) => font.widthOfTextAtSize(text, STAMP_SLOT_FONT_PT);
+		const title = "6. Lec06 - Introduction to Asymmetric Cryptographic Algorithms";
+		const full = widthOf(title);
+		expect(slotLineCount(["Overview", "", title], widthOf, [full, full, full])).toBe(1);
+		expect(slotLineCount(["Overview", "", title], widthOf, [full, full, full * 0.5])).toBeGreaterThan(1);
 	});
 
 	it("wraps a long section title onto full lines", async () => {

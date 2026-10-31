@@ -59,7 +59,7 @@ import {
 	sectionTitleForPage,
 	slotsUseSection,
 } from "./section-title";
-import { slotColumnWidth, slotLineCount, widestText, widthOfFont, wrapSlotText } from "./slot-wrap";
+import { slotLineCount, slotSpansForTexts, widestText, widthOfFont, wrapSlotText } from "./slot-wrap";
 
 export interface BuildPdfResult {
 	bytes: Uint8Array;
@@ -178,7 +178,7 @@ async function buildPdfBytesElectron(
 			ctx,
 			headingSources,
 			level,
-			slotColumnWidth(columnPt),
+			columnPt,
 			clampSlotFontSize(settings.header.fontSizePt),
 		);
 		const footerLines = await runningEdgeLines(
@@ -188,7 +188,7 @@ async function buildPdfBytesElectron(
 			ctx,
 			headingSources,
 			level,
-			slotColumnWidth(columnPt),
+			columnPt,
 			clampSlotFontSize(settings.footer.fontSizePt),
 		);
 		const bands = { headerLines, footerLines };
@@ -278,10 +278,14 @@ async function runningEdgeLines(
 	const widthOf = await widthOfFont(fontBytes, fontSize);
 	const section = widestText(sectionTitleCandidates(headings, level), widthOf);
 	const slotCtx: VariableContext = { ...ctx, page: 999, pages: 999, section, datetimeFormat: slots.datetimeFormat };
+	const texts = [slots.left, slots.center, slots.right].map((template) =>
+		renderTemplate(template, slotCtx),
+	) as [string, string, string];
+	const spans = slotSpansForTexts(columnPt, texts, widthOf);
 	return slotLineCount(
-		[slots.left, slots.center, slots.right].map((template) => renderTemplate(template, slotCtx)),
+		texts,
 		widthOf,
-		columnPt,
+		spans.map((span) => span.width),
 	);
 }
 
@@ -348,7 +352,7 @@ export async function buildPdfBytesRaster(
 			frontmatter,
 			now: new Date(),
 		};
-		const columnPt = slotColumnWidth(pt(preliminary.contentWidthMm));
+		const columnPt = pt(preliminary.contentWidthMm);
 		const level = Number(settings.sectionHeadingLevel) || 1;
 		const headingSources = readSectionHeadings(rendered.contentEl);
 		const bands = {
@@ -641,7 +645,8 @@ export async function exportNoteViaWebPrint(
 			now: new Date(),
 		};
 		const css = printFrameCss(page, margins, settings);
-		mountPrintFrame(doc, file.basename, css, settings, ctx);
+		const contentWidthMm = Math.max(0, page.width - margins.left - margins.right);
+		await mountPrintFrame(doc, file.basename, css, settings, ctx, contentWidthMm);
 
 		rendered.printEl.removeClass("pagina-parked-print");
 		rendered.printEl.addClass("pagina-print-flow");
@@ -707,12 +712,12 @@ function printFrameCss(
 @page { size: ${page.width}mm ${page.height}mm; margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm; }
 html, body { margin: 0; padding: 0; background: #fff; color: #222; ${colorAdjust} }
 .pagina-run-header, .pagina-run-footer {
-  position: fixed; left: 0; right: 0; display: flex; gap: 8px;
+  position: fixed; left: 0; right: 0; display: flex; gap: 0;
   font-size: 9pt; line-height: 1.2; box-sizing: border-box;
 }
 .pagina-run-header { top: 2mm; }
 .pagina-run-footer { bottom: 2mm; }
-.pagina-run-header > div, .pagina-run-footer > div { flex: 1; min-width: 0; }
+.pagina-run-header > div, .pagina-run-footer > div { flex: 0 0 auto; min-width: 0; box-sizing: border-box; }
 .pagina-run-header .center, .pagina-run-footer .center { text-align: center; }
 .pagina-run-header .right, .pagina-run-footer .right { text-align: right; }
 .pagina-page-num::after { content: counter(page); }
@@ -745,43 +750,59 @@ function appendPrintSlot(
 	}
 }
 
-function appendPrintBand(
+async function appendPrintBand(
 	doc: Document,
 	kind: "header" | "footer",
 	slots: PaginaSettings["header"],
 	ctx: VariableContext,
-): void {
+	contentWidthMm: number,
+): Promise<void> {
 	if (!slots.left && !slots.center && !slots.right) return;
 	const band = createDiv({ cls: `pagina-run-${kind}` });
 	band.style.color = slots.textColor || "#555555";
+	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	band.style.fontSize = `${fontPt}pt`;
 	if (slots.borderStyle && slots.borderStyle !== "none") {
 		const border = `1px solid ${slots.borderColor || "#000000"}`;
 		if (kind === "header") band.style.borderBottom = border;
 		else band.style.borderTop = border;
 	}
-	for (const align of ["left", "center", "right"] as const) {
+	const measureCtx: VariableContext = { ...ctx, page: 999, pages: 999, datetimeFormat: slots.datetimeFormat };
+	const texts = (["left", "center", "right"] as const).map((align) =>
+		renderTemplate(slots[align], measureCtx),
+	) as [string, string, string];
+	const widthOf = await widthOfFont(null, fontPt);
+	const contentPt = pt(contentWidthMm);
+	const spans = slotSpansForTexts(contentPt, texts, widthOf);
+	const aligns = ["left", "center", "right"] as const;
+	for (let i = 0; i < aligns.length; i++) {
+		const align = aligns[i]!;
 		const cell = band.createDiv({ cls: align });
+		const span = spans[i];
+		const share = contentPt > 0 ? ((span?.width ?? 0) / contentPt) * 100 : 100 / 3;
+		cell.style.width = `${share}%`;
 		appendPrintSlot(cell, slots[align], ctx, slots.datetimeFormat);
 	}
 	doc.body.appendChild(doc.importNode(band, true));
 	band.remove();
 }
 
-function mountPrintFrame(
+async function mountPrintFrame(
 	doc: Document,
 	title: string,
 	css: string,
 	settings: PaginaSettings,
 	ctx: VariableContext,
-): void {
+	contentWidthMm: number,
+): Promise<void> {
 	const titleEl = createEl("title", { text: title });
 	doc.head.appendChild(doc.importNode(titleEl, true));
 	titleEl.remove();
 	const sheet = new CSSStyleSheet();
 	sheet.replaceSync(css);
 	doc.adoptedStyleSheets = [sheet];
-	if (settings.displayHeader) appendPrintBand(doc, "header", settings.header, ctx);
-	if (settings.displayFooter) appendPrintBand(doc, "footer", settings.footer, ctx);
+	if (settings.displayHeader) await appendPrintBand(doc, "header", settings.header, ctx, contentWidthMm);
+	if (settings.displayFooter) await appendPrintBand(doc, "footer", settings.footer, ctx, contentWidthMm);
 }
 
 function waitForPrintImages(doc: Document): Promise<void> {
@@ -870,8 +891,6 @@ function drawHeaderFooter(
 	const ink = rgb(80 / 255, 80 / 255, 80 / 255);
 	const contentLeft = layout.marginLeftMm;
 	const contentWidth = layout.contentWidthMm;
-	const contentRight = contentLeft + contentWidth;
-	const centerX = contentLeft + contentWidth / 2;
 
 	if (settings.displayHeader) {
 		const headerPt = clampSlotFontSize(settings.header.fontSizePt);
@@ -884,8 +903,6 @@ function drawHeaderFooter(
 			ink,
 			settings.header,
 			contentLeft,
-			centerX,
-			contentRight,
 			textY,
 			contentWidth,
 			ctx,
@@ -925,8 +942,6 @@ function drawHeaderFooter(
 			ink,
 			settings.footer,
 			contentLeft,
-			centerX,
-			contentRight,
 			textY,
 			contentWidth,
 			ctx,
@@ -941,20 +956,36 @@ function drawSlots(
 	font: PDFFont,
 	ink: ReturnType<typeof rgb>,
 	slots: { left: string; center: string; right: string; datetimeFormat?: string; fontSizePt?: number },
-	leftX: number,
-	centerX: number,
-	rightX: number,
+	contentLeftMm: number,
 	y: number,
-	maxWidth: number,
+	contentWidthMm: number,
 	ctx: VariableContext,
 	direction: "down" | "up",
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
-	const colW = slotColumnWidth(maxWidth);
 	const fontPt = clampSlotFontSize(slots.fontSizePt);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.left, slotCtx), leftX, y, colW, "left", direction, fontPt);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.center, slotCtx), centerX, y, colW, "center", direction, fontPt);
-	drawSlot(page, pageHeightPt, font, ink, renderTemplate(slots.right, slotCtx), rightX, y, colW, "right", direction, fontPt);
+	const widthOf = (sample: string): number | null => {
+		try {
+			return font.widthOfTextAtSize(sample, fontPt);
+		} catch {
+			return null;
+		}
+	};
+	const texts = [slots.left, slots.center, slots.right].map((template) =>
+		renderTemplate(template, slotCtx),
+	) as [string, string, string];
+	const spans = slotSpansForTexts(pt(contentWidthMm), texts, widthOf);
+	const aligns = ["left", "center", "right"] as const;
+	for (let i = 0; i < aligns.length; i++) {
+		const span = spans[i];
+		if (!span) continue;
+		const align = aligns[i]!;
+		const leftMm = contentLeftMm + span.left / PT_PER_MM;
+		const widthMm = span.width / PT_PER_MM;
+		const anchor =
+			align === "left" ? leftMm : align === "center" ? leftMm + widthMm / 2 : leftMm + widthMm;
+		drawSlot(page, pageHeightPt, font, ink, texts[i] ?? "", anchor, y, widthMm, align, direction, fontPt);
+	}
 }
 
 function drawSlot(
