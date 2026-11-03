@@ -217,6 +217,7 @@ function headerFooterHtml(
 	edge: "header" | "footer",
 	noteFont: string,
 	omitText: boolean,
+	omitRule: boolean,
 	lines: number,
 	contentWidthPx: number,
 ): string {
@@ -225,7 +226,7 @@ function headerFooterHtml(
 	const right = omitText ? "" : chromiumSlot(slots.right, ctx, slots.datetimeFormat);
 	const textColor = slots.textColor || "#555555";
 	const fontFamily = cssFontFamily(slots.fontFamily, noteFont);
-	const rule = borderSvg(slots.borderStyle, slots.borderColor);
+	const rule = omitRule ? "" : borderSvg(slots.borderStyle, slots.borderColor);
 	const fontPt = clampSlotFontSize(slots.fontSizePt);
 	const linePx = mmToCssPx(lineMm(fontPt));
 	const rowPx = mmToCssPx(lineMm(fontPt) * Math.max(1, lines));
@@ -264,6 +265,9 @@ export interface ElectronPrintExtras {
 	/** Vault font is stamped on afterwards, so the template keeps the border spacer only. */
 	headerOmitText?: boolean;
 	footerOmitText?: boolean;
+	/** The stamp draws the rule next to that text, so Chromium must not draw one too. */
+	headerOmitRule?: boolean;
+	footerOmitRule?: boolean;
 	/** Lines reserved so a wrapped slot stays above the border. */
 	headerLines?: number;
 	footerLines?: number;
@@ -330,6 +334,7 @@ export function makeElectronPrintOptions(
 					"header",
 					noteFont,
 					Boolean(extras?.headerOmitText),
+					Boolean(extras?.headerOmitRule),
 					Math.max(1, extras?.headerLines ?? 1),
 					contentWidthPx,
 				)
@@ -343,6 +348,7 @@ export function makeElectronPrintOptions(
 					"footer",
 					noteFont,
 					Boolean(extras?.footerOmitText),
+					Boolean(extras?.footerOmitRule),
 					Math.max(1, extras?.footerLines ?? 1),
 					contentWidthPx,
 				)

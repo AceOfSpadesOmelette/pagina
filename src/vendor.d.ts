@@ -35,18 +35,33 @@ declare module "electron" {
 }
 
 declare module "fs" {
+	export interface Dirent {
+		name: string;
+		isDirectory(): boolean;
+	}
 	export const promises: {
 		writeFile(path: string, data: Uint8Array): Promise<void>;
 		access(path: string): Promise<void>;
 		readFile(path: string): Promise<Uint8Array>;
 		unlink(path: string): Promise<void>;
+		readdir(path: string, options: { withFileTypes: true }): Promise<Dirent[]>;
 	};
 }
 
 declare module "path" {
 	export function join(...parts: string[]): string;
+	export function basename(file: string, ext?: string): string;
+	export function extname(file: string): string;
+	export function isAbsolute(file: string): boolean;
 }
 
 declare module "os" {
 	export function tmpdir(): string;
+	export function homedir(): string;
+	export function platform(): string;
 }
+
+declare const process: {
+	platform: string;
+	env: Record<string, string | undefined>;
+};

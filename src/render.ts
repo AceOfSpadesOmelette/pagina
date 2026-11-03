@@ -840,6 +840,8 @@ export interface RenderNoteOptions {
 	app: App;
 	file: TFile;
 	includeTitle: boolean;
+	/** Horizontally center the file-name title. */
+	centerNoteTitle?: boolean;
 	/** Force a new page before each body H1 (CSS; excluded: file-name title). */
 	pageBreakBeforeH1?: boolean;
 	/** Center body H1s (excluded: file-name title). */
@@ -869,6 +871,7 @@ export interface RenderNoteOptions {
 export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	RenderNoteOptions,
 	| "includeTitle"
+	| "centerNoteTitle"
 	| "pageBreakBeforeH1"
 	| "centerH1"
 	| "underlineH1"
@@ -883,6 +886,7 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 > {
 	return {
 		includeTitle: settings.includeFileNameAsTitle,
+		centerNoteTitle: settings.centerNoteTitle,
 		pageBreakBeforeH1: settings.pageBreakBeforeH1,
 		centerH1: settings.centerH1,
 		underlineH1: settings.underlineH1,
@@ -902,6 +906,7 @@ export function applyH1StyleClasses(
 	printEl: HTMLElement,
 	opts: Pick<
 		RenderNoteOptions,
+		| "centerNoteTitle"
 		| "pageBreakBeforeH1"
 		| "centerH1"
 		| "underlineH1"
@@ -913,6 +918,7 @@ export function applyH1StyleClasses(
 		| "landscape"
 	>,
 ): void {
+	printEl.toggleClass("pagina-center-title", Boolean(opts.centerNoteTitle));
 	printEl.toggleClass("pagina-break-h1", Boolean(opts.pageBreakBeforeH1) && !opts.cheatSheet);
 	printEl.toggleClass("pagina-center-h1", Boolean(opts.centerH1));
 	printEl.toggleClass("pagina-underline-h1", Boolean(opts.underlineH1));

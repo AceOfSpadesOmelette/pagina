@@ -66,6 +66,8 @@ export type TimestampFormat = "none" | "EPOCH" | "YYYYMMDD" | "YYYY-MM-DD" | "YY
 
 export interface PaginaSettings {
 	includeFileNameAsTitle: boolean;
+	/** Horizontally center the file-name title. */
+	centerNoteTitle: boolean;
 	/** Start a new PDF page at each body H1 (excludes the file-name title). */
 	pageBreakBeforeH1: boolean;
 	/** Horizontally center body H1s in the PDF (excludes the file-name title). */
@@ -113,6 +115,7 @@ export interface PaginaSettings {
 
 export const DEFAULT_SETTINGS: PaginaSettings = {
 	includeFileNameAsTitle: true,
+	centerNoteTitle: false,
 	pageBreakBeforeH1: false,
 	centerH1: false,
 	underlineH1: false,
@@ -186,6 +189,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		),
 		maxHeadingLevel,
 		pageBreakBeforeH1: data.pageBreakBeforeH1 ?? DEFAULT_SETTINGS.pageBreakBeforeH1,
+		centerNoteTitle: data.centerNoteTitle ?? DEFAULT_SETTINGS.centerNoteTitle,
 		centerH1: data.centerH1 ?? DEFAULT_SETTINGS.centerH1,
 		underlineH1: data.underlineH1 ?? DEFAULT_SETTINGS.underlineH1,
 		printBackground: data.printBackground ?? DEFAULT_SETTINGS.printBackground,

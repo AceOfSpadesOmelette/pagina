@@ -106,13 +106,26 @@ export function renderPaginaSettings(
 
 	new Setting(container)
 		.setName("Include file name as title")
-		.setDesc("Center the note name at the top of the export.")
+		.setDesc("Show the note name at the top of the export.")
 		.addToggle((t) =>
 			t.setValue(settings.includeFileNameAsTitle).onChange((v) => {
 				settings.includeFileNameAsTitle = v;
 				notify();
+				opts.onRebuild();
 			}),
 		);
+
+	if (settings.includeFileNameAsTitle) {
+		new Setting(container)
+			.setName("Center note title")
+			.setDesc("Horizontally center the file-name title.")
+			.addToggle((t) =>
+				t.setValue(settings.centerNoteTitle).onChange((v) => {
+					settings.centerNoteTitle = v;
+					notify();
+				}),
+			);
+	}
 
 	new Setting(container).setName("Heading 1").setHeading();
 

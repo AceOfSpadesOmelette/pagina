@@ -122,7 +122,8 @@ export class PaginaSettingTab extends PluginSettingTab {
 			key === "marginPreset" ||
 			key === "displayHeader" ||
 			key === "displayFooter" ||
-			key === "cheatSheet"
+			key === "cheatSheet" ||
+			key === "includeFileNameAsTitle"
 		) {
 			this.update();
 		}
@@ -189,8 +190,14 @@ export class PaginaSettingTab extends PluginSettingTab {
 				items: [
 					{
 						name: "Include file name as title",
-						desc: "Center the note name at the top of the export.",
+						desc: "Show the note name at the top of the export.",
 						control: { type: "toggle", key: "includeFileNameAsTitle" },
+					},
+					{
+						name: "Center note title",
+						desc: "Horizontally center the file-name title.",
+						visible: () => this.plugin.settings.includeFileNameAsTitle,
+						control: { type: "toggle", key: "centerNoteTitle" },
 					},
 				],
 			},

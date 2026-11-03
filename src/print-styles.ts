@@ -245,6 +245,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
   page-break-before: always;
 }
+.print.pagina-print.pagina-center-title h1.__title__ {
+  text-align: center;
+}
 .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
   text-align: center;
 }
@@ -344,6 +347,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
   }
   .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
     page-break-before: always;
+  }
+  .print.pagina-print.pagina-center-title h1.__title__ {
+    text-align: center;
   }
   .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
     text-align: center;

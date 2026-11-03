@@ -198,6 +198,8 @@ async function buildPdfBytesElectron(
 		const options = makeElectronPrintOptions(settings, ctx, rendered.printEl, {
 			headerOmitText: headerFace != null || headerUsesSection,
 			footerOmitText: footerFace != null || footerUsesSection,
+			headerOmitRule: headerFace != null,
+			footerOmitRule: footerFace != null,
 			headerLines,
 			footerLines,
 		});
@@ -256,6 +258,8 @@ async function buildPdfBytesElectron(
 				...(redrawEdges ? { cover: true } : {}),
 				...(stampFallback ? { standardFallback: true } : {}),
 				...(sections ? { sections } : {}),
+				headerLines,
+				footerLines,
 			},
 		);
 		return { bytes: copyBytes(stamped), totalPages: 0 };
@@ -762,6 +766,8 @@ async function appendPrintBand(
 	band.style.color = slots.textColor || "#555555";
 	const fontPt = clampSlotFontSize(slots.fontSizePt);
 	band.style.fontSize = `${fontPt}pt`;
+	const face = slots.fontFamily?.trim();
+	if (face) band.style.fontFamily = face;
 	if (slots.borderStyle && slots.borderStyle !== "none") {
 		const border = `1px solid ${slots.borderColor || "#000000"}`;
 		if (kind === "header") band.style.borderBottom = border;
@@ -824,9 +830,12 @@ function waitForPrintImages(doc: Document): Promise<void> {
 }
 
 function vaultFontFiles(app: App): VaultFontFiles {
+	const adapter = app.vault.adapter;
 	return {
 		configDir: app.vault.configDir,
-		read: (normalizedPath) => app.vault.adapter.read(normalizedPath),
+		read: (normalizedPath) => adapter.read(normalizedPath),
+		readBinary: (normalizedPath) => adapter.readBinary(normalizedPath),
+		list: (normalizedPath) => adapter.list(normalizedPath),
 	};
 }
 

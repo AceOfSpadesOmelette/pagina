@@ -1,10 +1,20 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
+import { borderExtentMm, drawBorderBand } from "./header-borders";
 import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
 import { resolvePrintMarginsMm } from "./page-presets";
 import { slotSpansForTexts, wrapSlotText } from "./slot-wrap";
 import { clampSlotFontSize, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
+
+/**
+ * CFF faces (`OTTO`) must be embedded whole. Subsetting them writes a
+ * CIDFontType0C program that Chromium's PDF viewer replaces with a serif.
+ * TrueType faces keep the subset path.
+ */
+export function embedFullFace(bytes: Uint8Array): boolean {
+	return bytes.length >= 4 && bytes[0] === 0x4f && bytes[1] === 0x54 && bytes[2] === 0x54 && bytes[3] === 0x4f;
+}
 
 export interface StampOptions {
 	/** Paint out Chromium's header or footer text before drawing a replacement. */
@@ -13,6 +23,9 @@ export interface StampOptions {
 	standardFallback?: boolean;
 	/** {{section}} text for each page, in order. */
 	sections?: readonly string[];
+	/** Reserved lines. The rule is drawn above this band, with the stamped text. */
+	headerLines?: number;
+	footerLines?: number;
 }
 
 export async function stampHeaderFooter(
@@ -31,7 +44,16 @@ export async function stampHeaderFooter(
 	const fontFor = async (data: Uint8Array): Promise<PDFFont> => {
 		let font = embedded.get(data);
 		if (!font) {
-			font = await doc.embedFont(data, { subset: true });
+			if (embedFullFace(data)) {
+				font = await doc.embedFont(data, { subset: false });
+			} else {
+				try {
+					font = await doc.embedFont(data, { subset: true });
+				} catch (error) {
+					console.error("Pagina: could not subset the header or footer font; embedding the full face", error);
+					font = await doc.embedFont(data, { subset: false });
+				}
+			}
 			embedded.set(data, font);
 		}
 		return font;
@@ -63,10 +85,15 @@ export async function stampHeaderFooter(
 			pages: total,
 			section: options?.sections?.[index] ?? ctx.section ?? "",
 		};
-		const { height } = page.getSize();
+		const { height, width } = page.getSize();
+		const pageHeightMm = height / mm(1);
+		const contentWidthMm = Math.max(0, width / mm(1) - margins.left - margins.right);
 		if (settings.displayHeader && headerFont) {
 			const headerPt = clampSlotFontSize(settings.header.fontSizePt);
 			if (options?.cover && !fonts.header) coverEdge(page, "header", headerPt);
+			if (fonts.header) {
+				drawEdgeRule(page, height, settings.header, margins.left, contentWidthMm, headerRuleTopMm(headerPt, options?.headerLines));
+			}
 			drawEdge(
 				page,
 				headerFont,
@@ -80,6 +107,16 @@ export async function stampHeaderFooter(
 		if (settings.displayFooter && footerFont) {
 			const footerPt = clampSlotFontSize(settings.footer.fontSizePt);
 			if (options?.cover && !fonts.footer) coverEdge(page, "footer", footerPt);
+			if (fonts.footer) {
+				drawEdgeRule(
+					page,
+					height,
+					settings.footer,
+					margins.left,
+					contentWidthMm,
+					footerRuleTopMm(pageHeightMm, footerPt, options?.footerLines, settings.footer.borderStyle),
+				);
+			}
 			drawEdge(
 				page,
 				footerFont,
@@ -92,6 +129,36 @@ export async function stampHeaderFooter(
 		}
 	}
 	return doc.save();
+}
+
+function headerRuleTopMm(fontSizePt: number, lines: number | undefined): number {
+	return FRAME_INSET_MM + lineMm(fontSizePt) * Math.max(1, lines ?? 1) + TEXT_BORDER_GAP_MM;
+}
+
+function footerRuleTopMm(
+	pageHeightMm: number,
+	fontSizePt: number,
+	lines: number | undefined,
+	borderStyle: unknown,
+): number {
+	return (
+		pageHeightMm -
+		FRAME_INSET_MM -
+		lineMm(fontSizePt) * Math.max(1, lines ?? 1) -
+		TEXT_BORDER_GAP_MM -
+		borderExtentMm(borderStyle)
+	);
+}
+
+function drawEdgeRule(
+	page: PDFPage,
+	pageHeightPt: number,
+	slots: HeaderFooterSlots,
+	xMm: number,
+	widthMm: number,
+	yTopMm: number,
+): void {
+	drawBorderBand(page, pageHeightPt, slots.borderStyle, slots.borderColor, xMm, yTopMm, widthMm);
 }
 
 /** Cover the running text, and stop short of the border rule. */

@@ -89,6 +89,7 @@ describe("settings", () => {
 		expect(settings.cheatSheetFontSizePt).toBe(8);
 		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
+		expect(settings.centerNoteTitle).toBe(false);
 		expect(settings.header.fontSizePt).toBe(6.75);
 		expect(settings.footer.fontSizePt).toBe(6.75);
 	});
@@ -203,11 +204,16 @@ describe("exam cheat sheet", () => {
 			cheatSheetUniformText: true,
 		});
 		expect(el.classList.contains("pagina-break-h1")).toBe(false);
+		expect(el.classList.contains("pagina-center-title")).toBe(false);
 		expect(el.classList.contains("pagina-cheat-sheet")).toBe(true);
 		expect(el.classList.contains("pagina-cheat-compact")).toBe(true);
 		expect(el.classList.contains("pagina-uniform-text")).toBe(true);
 		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("9pt");
 		expect(el.style.getPropertyValue("--pagina-cheat-columns")).toBe("4");
+		applyH1StyleClasses(el, { centerNoteTitle: true, cheatSheet: true });
+		expect(el.classList.contains("pagina-center-title")).toBe(true);
+		applyH1StyleClasses(el, { centerNoteTitle: false, cheatSheet: true });
+		expect(el.classList.contains("pagina-center-title")).toBe(false);
 		applyCheatSheetClasses(el, { cheatSheet: false });
 		expect(el.classList.contains("pagina-cheat-sheet")).toBe(false);
 		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("");
