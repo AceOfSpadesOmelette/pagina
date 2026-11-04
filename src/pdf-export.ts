@@ -23,8 +23,9 @@ import {
 } from "./print-styles";
 import { applyContinuousText } from "./cheat-sheet";
 import { dropTrailingBlankPage } from "./blank-page";
+import { restampOrderedLists } from "./ordered-lists";
 import { applyH1StyleClasses, collectStyles, renderFlagsFromSettings, renderNoteForExport, type RenderedNote } from "./render";
-import { renderTemplate, formatTimestamp, type VariableContext } from "./variables";
+import { renderTemplate, formatTimestamp, formatPropertyValue, propertyTokenErrors, resolveNoteTitle, type VariableContext } from "./variables";
 import { prepareCloneForCapture, sanitizeCssText } from "./css-sanitize";
 import {
 	applyPdfPostProcess,
@@ -115,15 +116,17 @@ export async function buildPdfBytes(
 	settings: PaginaSettings,
 	existingRender?: RenderedNote,
 	onProgress?: PdfProgress,
+	noteTitle?: string,
 ): Promise<BuildPdfResult> {
 	const layoutMessage = layoutWarning(settings);
 	if (layoutMessage) {
 		throw new Error(layoutMessage);
 	}
+	assertIndexedProperties(app, file, settings);
 	if (!isElectronPrintAvailable()) {
-		return buildPdfBytesRaster(app, file, settings, onProgress);
+		return buildPdfBytesRaster(app, file, settings, onProgress, noteTitle);
 	}
-	return buildPdfBytesElectron(app, file, settings, existingRender);
+	return buildPdfBytesElectron(app, file, settings, existingRender, noteTitle);
 }
 
 async function buildPdfBytesElectron(
@@ -131,6 +134,7 @@ async function buildPdfBytesElectron(
 	file: TFile,
 	settings: PaginaSettings,
 	existingRender?: RenderedNote,
+	noteTitle?: string,
 ): Promise<BuildPdfResult> {
 	const rendered =
 		existingRender ??
@@ -138,6 +142,7 @@ async function buildPdfBytesElectron(
 			app,
 			file,
 			...renderFlagsFromSettings(settings),
+			titleText: noteTitle,
 		}));
 	applyH1StyleClasses(rendered.printEl, settings);
 	if (settings.cheatSheet && settings.cheatSheetDensity === "continuous") {
@@ -148,7 +153,7 @@ async function buildPdfBytesElectron(
 	try {
 		const frontmatter = rendered.frontmatter ?? app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const ctx: VariableContext = {
-			title: file.basename,
+			title: resolveNoteTitle(frontmatter, file.basename, noteTitle),
 			filename: file.name,
 			page: 1,
 			pages: 1,
@@ -224,7 +229,7 @@ async function buildPdfBytesElectron(
 			headingRoot: rendered.contentEl,
 			maxLevel: Number(settings.maxHeadingLevel) || 6,
 			tagged: settings.generateTaggedPDF,
-			metadata: metadataFrom(settings, file, frontmatter),
+			metadata: metadataFrom(settings, file, frontmatter, noteTitle),
 		});
 		let printable = copyBytes(processed);
 		let redrawEdges = false;
@@ -332,6 +337,7 @@ export async function buildPdfBytesRaster(
 	file: TFile,
 	settings: PaginaSettings,
 	onProgress?: PdfProgress,
+	noteTitle?: string,
 ): Promise<BuildPdfResult> {
 	const preliminary = computePageLayout(settings);
 	onProgress?.("Pagina: preparing PDF…");
@@ -340,6 +346,7 @@ export async function buildPdfBytesRaster(
 		app,
 		file,
 		...renderFlagsFromSettings(settings),
+		titleText: noteTitle,
 		forRaster: true,
 		bakeMermaid: false,
 		contentWidthPx: preliminary.contentWidthPx,
@@ -349,7 +356,7 @@ export async function buildPdfBytesRaster(
 		rendered.printEl.addClass("pagina-print-shown");
 		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const measureCtx: VariableContext = {
-			title: file.basename,
+			title: resolveNoteTitle(frontmatter, file.basename, noteTitle),
 			filename: file.name,
 			page: 1,
 			pages: 1,
@@ -414,6 +421,7 @@ export async function buildPdfBytesRaster(
 		const prevOverflow = rendered.printEl.style.overflow;
 		const prevHostHeight = rendered.printEl.style.height;
 		const prevTransform = contentEl.style.transform;
+		restampOrderedLists(rendered.printEl);
 
 		try {
 			for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
@@ -487,7 +495,7 @@ export async function buildPdfBytesRaster(
 				}
 
 				const varCtx: VariableContext = {
-					title: file.basename,
+					title: resolveNoteTitle(frontmatter, file.basename, noteTitle),
 					filename: file.name,
 					page: pageIndex + 1,
 					pages: totalPages,
@@ -510,7 +518,7 @@ export async function buildPdfBytesRaster(
 		const processed = await applyPdfPostProcess(copyBuffer(raw), {
 			outlines,
 			tagged: settings.generateTaggedPDF,
-			metadata: metadataFrom(settings, file, frontmatter),
+			metadata: metadataFrom(settings, file, frontmatter, noteTitle),
 		});
 
 		const out = new Uint8Array(processed.byteLength);
@@ -600,14 +608,17 @@ export async function exportNoteViaWebPrint(
 	file: TFile,
 	settings: PaginaSettings,
 	onProgress?: PdfProgress,
+	noteTitle?: string,
 ): Promise<void> {
 	const layoutMessage = layoutWarning(settings);
 	if (layoutMessage) throw new Error(layoutMessage);
+	assertIndexedProperties(app, file, settings);
 	onProgress?.("Pagina: preparing the print dialog…");
 	const rendered = await renderNoteForExport({
 		app,
 		file,
 		...renderFlagsFromSettings(settings),
+		titleText: noteTitle,
 		forPrint: true,
 	});
 	applyH1StyleClasses(rendered.printEl, settings);
@@ -641,7 +652,7 @@ export async function exportNoteViaWebPrint(
 		const margins = resolvePrintMarginsMm(settings);
 		const frontmatter = rendered.frontmatter ?? app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const ctx: VariableContext = {
-			title: file.basename,
+			title: resolveNoteTitle(frontmatter, file.basename, noteTitle),
 			filename: file.name,
 			page: 1,
 			pages: 1,
@@ -658,6 +669,7 @@ export async function exportNoteViaWebPrint(
 		doc.body.appendChild(rendered.printEl);
 		await applyExportContentBox(rendered, computePageLayout(settings));
 		await waitForPrintImages(doc);
+		restampOrderedLists(rendered.printEl);
 
 		let dialogOpened = false;
 		win.addEventListener(
@@ -692,15 +704,16 @@ export async function exportNoteWithoutElectron(
 	file: TFile,
 	settings: PaginaSettings,
 	onProgress?: PdfProgress,
+	noteTitle?: string,
 ): Promise<string> {
 	try {
-		await exportNoteViaWebPrint(app, file, settings, onProgress);
+		await exportNoteViaWebPrint(app, file, settings, onProgress, noteTitle);
 		return "";
 	} catch (error) {
 		if (!(error instanceof WebPrintUnavailableError)) throw error;
 	}
 	onProgress?.("Pagina: print dialog unavailable, building a smaller PDF…");
-	const { bytes } = await buildPdfBytesRaster(app, file, settings, onProgress);
+	const { bytes } = await buildPdfBytesRaster(app, file, settings, onProgress, noteTitle);
 	return sharePdfOutsideVault(app, file, bytes, settings, onProgress);
 }
 
@@ -849,10 +862,23 @@ function copyBytes(data: Uint8Array): Uint8Array {
 	return out;
 }
 
+function assertIndexedProperties(app: App, file: TFile, settings: PaginaSettings): void {
+	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+	const templates: string[] = [];
+	const take = (slots: { left: string; center: string; right: string }) => {
+		templates.push(slots.left ?? "", slots.center ?? "", slots.right ?? "");
+	};
+	if (settings.displayHeader) take(settings.header);
+	if (settings.displayFooter) take(settings.footer);
+	const errors = propertyTokenErrors(templates, frontmatter);
+	if (errors.length) throw new Error(errors.join("\n"));
+}
+
 function metadataFrom(
 	settings: PaginaSettings,
 	file: TFile,
 	frontmatter: object,
+	noteTitle?: string,
 ):
 	| {
 			title?: string;
@@ -866,12 +892,12 @@ function metadataFrom(
 	if (!settings.pdfMetadata) return undefined;
 	const fm = frontmatter as Record<string, unknown>;
 	return {
-		title: str(fm.title) || file.basename,
-		author: str(fm.author),
-		subject: str(fm.subject),
-		keywords: str(fm.keywords) || str(fm.tags),
-		creator: str(fm.creator) || "Pagina",
-		producer: str(fm.producer) || "Pagina for Obsidian",
+		title: resolveNoteTitle(fm, file.basename, noteTitle),
+		author: formatPropertyValue(fm.author),
+		subject: formatPropertyValue(fm.subject),
+		keywords: formatPropertyValue(fm.keywords) || formatPropertyValue(fm.tags),
+		creator: formatPropertyValue(fm.creator) || "Pagina",
+		producer: formatPropertyValue(fm.producer) || "Pagina for Obsidian",
 	};
 }
 
@@ -880,13 +906,6 @@ function clampOutlinePages(items: OutlineItem[], maxPage: number): void {
 		item.pageIndex = Math.min(item.pageIndex, maxPage);
 		clampOutlinePages(item.children, maxPage);
 	}
-}
-
-function str(value: unknown): string {
-	if (typeof value === "string") return value;
-	if (typeof value === "number" || typeof value === "boolean") return String(value);
-	if (Array.isArray(value)) return value.map((item) => str(item)).join(", ");
-	return "";
 }
 
 function drawHeaderFooter(

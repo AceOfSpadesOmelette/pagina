@@ -11,8 +11,8 @@ export interface CheatSheetStyleInput {
 }
 
 const PROTECTED =
-	"pre, table, img, video, canvas, mjx-container, .math, .katex, .mermaid, figure, .image-embed, .internal-embed, hr";
-const SKIP = "h1.__title__, .conspectus-toc";
+	"pre, table, img, video, canvas, mjx-container, .math, .katex, .mermaid, figure, .image-embed, .internal-embed, hr, .pagina-properties";
+const SKIP = "h1.__title__, .conspectus-toc, .pagina-properties";
 const INLINE = "a, em, strong, b, i, code, span, mark, del, s, u, sub, sup, kbd, abbr";
 const BLOCK = "p, div, li, ul, ol, blockquote, section, article, aside, header, footer";
 

@@ -18,7 +18,8 @@ import {
 import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
 import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
-import { formatTimestamp, renderTemplate } from "../src/variables";
+import { applyOrderedListStarts, orderedListStarts } from "../src/ordered-lists";
+import { formatPropertyValue, formatTimestamp, propertyRows, propertyTokenErrors, renderTemplate, resolveNoteTitle } from "../src/variables";
 
 describe("page presets", () => {
 	it("resolves A4 portrait and landscape", () => {
@@ -66,12 +67,371 @@ describe("variables", () => {
 		expect(out).toBe("Note / note.md / 2 of 5 / a, b");
 	});
 
+	it("formats property lists, scalars, and objects", () => {
+		expect(formatPropertyValue(["recipe", "dinner"])).toBe("recipe, dinner");
+		expect(formatPropertyValue([1, 2])).toBe("1, 2");
+		expect(formatPropertyValue(false)).toBe("false");
+		expect(formatPropertyValue(["a", ["b", "c"], 3])).toBe("a, b, c, 3");
+		expect(formatPropertyValue([])).toBe("");
+		expect(formatPropertyValue({ nested: true })).toBe("");
+		expect(formatPropertyValue(null)).toBe("");
+		expect(
+			renderTemplate("{{property:counts}}", {
+				title: "Note",
+				filename: "note.md",
+				page: 1,
+				pages: 1,
+				frontmatter: { counts: [1, 2] },
+			}),
+		).toBe("1, 2");
+	});
+
+	it("lists printable properties and skips position and blanks", () => {
+		expect(
+			propertyRows({
+				position: { start: { line: 0 } },
+				tags: ["a", "b"],
+				title: "Hello",
+				empty: "",
+				count: 1,
+				meta: { hidden: true },
+			}),
+		).toEqual([
+			{ key: "tags", value: "a, b" },
+			{ key: "title", value: "Hello" },
+			{ key: "count", value: "1" },
+		]);
+	});
+
+	it("resolves the printed title from a property, the file name, or a typed override", () => {
+		expect(resolveNoteTitle({ title: "From YAML" }, "file")).toBe("From YAML");
+		expect(resolveNoteTitle({}, "file")).toBe("file");
+		expect(resolveNoteTitle({ title: "" }, "file")).toBe("file");
+		expect(resolveNoteTitle({ title: 12 }, "file")).toBe("file");
+		expect(resolveNoteTitle({ title: "From YAML" }, "file", "Typed")).toBe("Typed");
+		expect(resolveNoteTitle({ title: "From YAML" }, "file", "  ")).toBe("file");
+		expect(resolveNoteTitle({ title: "From YAML" }, "file", "")).toBe("file");
+	});
+
+	it("prints one list item, including names with spaces, beside other text", () => {
+		const ctx = {
+			title: "Note",
+			filename: "note.md",
+			page: 1,
+			pages: 1,
+			frontmatter: {
+				tags: ["recipe", ["a", "b"]],
+				"due date": ["today", "tomorrow"],
+				author: "Ada",
+			},
+		};
+		expect(renderTemplate("{{property:tags[0]}}", ctx)).toBe("recipe");
+		expect(renderTemplate("{{property:tags[1]}}", ctx)).toBe("a, b");
+		expect(renderTemplate("{{property:tags[ 0 ]}}", ctx)).toBe("recipe");
+		expect(renderTemplate("{{property:tags}}", ctx)).toBe("recipe, a, b");
+		expect(renderTemplate("{{property:due date}}", ctx)).toBe("today, tomorrow");
+		expect(renderTemplate("{{property:due date[0]}}", ctx)).toBe("today");
+		expect(renderTemplate("Author: {{property:author}} ({{property:tags[0]}})", ctx)).toBe("Author: Ada (recipe)");
+	});
+
+	it("prefers a property whose name looks like an index", () => {
+		expect(
+			renderTemplate("{{property:tags[0]}}", {
+				title: "Note",
+				filename: "note.md",
+				page: 1,
+				pages: 1,
+				frontmatter: { "tags[0]": "literal", tags: ["recipe"] },
+			}),
+		).toBe("literal");
+	});
+
+	it("reports a bad list index and still throws from the template", () => {
+		const tags = { tags: ["a", "b"], title: "Hello" };
+		expect(propertyTokenErrors(["{{property:tags[2]}}"], tags)).toEqual(["tags[2] is out of range (2 items)"]);
+		expect(propertyTokenErrors(["{{property:tags[0]}}"], { tags: [] })).toEqual([
+			"tags[0] is out of range (0 items)",
+		]);
+		expect(propertyTokenErrors(["{{property:title[0]}}"], tags)).toEqual(["title is not a list"]);
+		expect(propertyTokenErrors(["{{property:missing[0]}}"], tags)).toEqual(["missing is not a list"]);
+		expect(propertyTokenErrors(["{{property:missing}}"], tags)).toEqual([]);
+		expect(propertyTokenErrors(["{{property:tags[-1]}}"], tags)[0]).toMatch(/invalid property index/);
+		expect(propertyTokenErrors(["{{property:tags[1.5]}}"], tags)[0]).toMatch(/invalid property index/);
+		expect(propertyTokenErrors(["{{property:tags[0][1]}}"], tags)[0]).toMatch(/invalid property index/);
+		expect(propertyTokenErrors(["{{property:tags[2]}}", "X {{property:tags[2]}}"], tags)).toEqual([
+			"tags[2] is out of range (2 items)",
+		]);
+		expect(() =>
+			renderTemplate("{{property:tags[2]}}", {
+				title: "Note",
+				filename: "note.md",
+				page: 1,
+				pages: 1,
+				frontmatter: tags,
+			}),
+		).toThrow(/out of range/);
+	});
+
 	it("formats timestamps", () => {
 		expect(formatTimestamp("YYYY-MM-DD", now)).toBe("2026-01-02");
 		expect(formatTimestamp("HH:MM:SS", now)).toBe("15:04:05");
 		expect(formatTimestamp("none", now)).toBe("");
 	});
 });
+
+describe("ordered lists", () => {
+	const note = [
+		"1. one",
+		"$$math$$",
+		"2. two",
+		"$$math$$",
+		"3. three",
+		"$$math$$",
+		"Mutual authentication:",
+		"1. picks",
+		"$$A$$",
+		"2. receives",
+		"$$B$$",
+		"3. finish",
+		"",
+		"**FLAW**",
+		"4. explicit",
+		"5. next",
+		"Next:",
+		"0. zero",
+		"1. after",
+	].join("\n");
+
+	it("keeps math inside a list and restarts after a plain line", () => {
+		expect(orderedListStarts(note)).toEqual([
+			{ start: 1, itemCount: 3 },
+			{ start: 1, itemCount: 3 },
+			{ start: 4, itemCount: 2 },
+			{ start: 0, itemCount: 2 },
+		]);
+	});
+
+	it("splits a merged list and stamps the written start", () => {
+		const root = document.createElement("div");
+		root.innerHTML = [
+			"<ol>",
+			"<li>one</li><li>two</li><li>three</li>",
+			"<p>Mutual authentication:</p>",
+			"<li>picks</li><li>receives</li><li>finish</li>",
+			"<li>explicit</li><li>next</li>",
+			"<li>zero</li><li>after</li>",
+			"</ol>",
+		].join("");
+		applyOrderedListStarts(root, note);
+		expect(markersFor(root, ["one", "two", "three", "picks", "receives", "finish", "explicit", "next", "zero", "after"])).toEqual([
+			"1",
+			"2",
+			"3",
+			"1",
+			"2",
+			"3",
+			"4",
+			"5",
+			"0",
+			"1",
+		]);
+		expect(root.querySelector(".pagina-ol-marker")).toBeNull();
+		const paragraph = [...root.querySelectorAll("p")].find((el) => el.textContent === "Mutual authentication:");
+		expect(paragraph?.parentElement).toBe(root);
+	});
+
+	it("numbers items when each one is already its own list", () => {
+		const labels = ["one", "two", "three", "picks", "receives", "finish", "explicit", "next", "zero", "after"];
+		const root = document.createElement("div");
+		root.innerHTML = labels.map((label) => `<ol><li>${label}</li></ol>`).join("");
+		applyOrderedListStarts(root, note);
+		const lists = [...root.querySelectorAll("ol")];
+		expect(lists).toHaveLength(10);
+		expect(markersFor(root, labels)).toEqual(["1", "2", "3", "1", "2", "3", "4", "5", "0", "1"]);
+		expect(lists.map((ol) => ol.getAttribute("start"))).toEqual(["1", "2", "3", "1", "2", "3", "4", "5", "0", "1"]);
+	});
+
+	it("sets the value on a paragraph item", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<ol><li><p>one</p></li><li><p>two</p></li></ol>";
+		applyOrderedListStarts(root, "1. one\n2. two\n");
+		const items = [...root.querySelectorAll("li")];
+		expect(items.map((li) => li.getAttribute("value"))).toEqual(["1", "2"]);
+		expect(root.querySelector(".pagina-ol-marker")).toBeNull();
+	});
+
+	it("sets the value when a math block precedes the paragraph", () => {
+		const root = document.createElement("div");
+		root.innerHTML = '<ol><li><div class="math"></div><p>picks</p></li></ol>';
+		applyOrderedListStarts(root, "1. picks\n");
+		expect(root.querySelector("li")?.getAttribute("value")).toBe("1");
+		expect(root.querySelector(".pagina-ol-marker")).toBeNull();
+	});
+
+	const flawNote = [
+		"Mutual authentication:",
+		"1. picks",
+		"$$A$$",
+		"2. receives",
+		"$$B$$",
+		"3. finish",
+		"$$C$$",
+		"",
+		"**FLAW (Reflection Attack)**",
+		"1. picks again",
+		"$$D$$",
+		"2. attacker",
+		"3. responds",
+		"4. intercepts",
+		"5. responses",
+		"6. abort",
+	].join("\n");
+
+	it("restarts at the digit written after FLAW", () => {
+		expect(orderedListStarts(flawNote)).toEqual([
+			{ start: 1, itemCount: 3 },
+			{ start: 1, itemCount: 6 },
+		]);
+	});
+
+	it("does not let leading math items consume the FLAW restart", () => {
+		const root = document.createElement("div");
+		const math = '<li><div class="math"></div></li>';
+		root.innerHTML = [
+			"<ol>",
+			"<li>picks</li><li>receives</li><li>finish</li>",
+			math,
+			math,
+			math,
+			"<li>picks again</li><li>attacker</li><li>responds</li>",
+			"<li>intercepts</li><li>responses</li><li>abort</li>",
+			"</ol>",
+		].join("");
+		applyOrderedListStarts(root, flawNote);
+		expect(markersFor(root, ["picks", "receives", "finish"])).toEqual(["1", "2", "3"]);
+		expect(markersFor(root, ["picks again", "attacker", "responds", "intercepts", "responses", "abort"])).toEqual([
+			"1",
+			"2",
+			"3",
+			"4",
+			"5",
+			"6",
+		]);
+		expect(root.querySelector(".pagina-ol-marker")).toBeNull();
+	});
+
+	it("restarts FLAW when math items already lead its list", () => {
+		const root = document.createElement("div");
+		const math = "<li><div class=\"math\"></div></li>";
+		root.innerHTML = [
+			"<ol><li>picks</li><li>receives</li><li>finish</li></ol>",
+			"<ol>",
+			math,
+			math,
+			math,
+			"<li>picks again</li><li>attacker</li><li>responds</li>",
+			"<li>intercepts</li><li>responses</li><li>abort</li>",
+			"</ol>",
+		].join("");
+		applyOrderedListStarts(root, flawNote);
+		const steps = [...root.querySelectorAll("li")].filter((li) =>
+			["picks again", "attacker", "responds", "intercepts", "responses", "abort"].includes(li.textContent ?? ""),
+		);
+		expect(steps.map((li) => li.getAttribute("value"))).toEqual(["1", "2", "3", "4", "5", "6"]);
+		expect(steps[0]?.parentElement?.getAttribute("start")).toBe("1");
+		expect(steps[0]?.parentElement?.querySelector(".math")).toBeNull();
+	});
+
+	const protocol = [
+		"Unilateral authentication:",
+		"1. $A$ sends a greeting to $B$.",
+		"$$hello$$",
+		"2. $B$ picks a random number.",
+		"$$rb$$",
+		"3. $A$ encrypts that random number.",
+		"$$ek$$",
+		"Mutual authentication:",
+		"1. A picks its own random number.",
+		"$$ra$$",
+		"2. B receives the numbers.",
+		"$$back$$",
+		"3. To finish proving its identity.",
+		"$$rb2$$",
+		"",
+		"**FLAW (Reflection Attack)**",
+		"1. A picks its own random number.",
+		"$$ra2$$",
+		"2. Attacker intercepts.",
+		"3. A responds to the second instance.",
+		"4. C intercepts the response.",
+		"5. A responses to the first instance.",
+		"6. The second instance can be aborted.",
+	].join("\n");
+
+	it("numbers each sentence when a math item precedes it", () => {
+		const root = document.createElement("div");
+		const math = '<li><div class="math"></div></li>';
+		const step = (text: string) => `<li>${text}</li>`;
+		root.innerHTML = [
+			"<ol>",
+			math,
+			step("$A$ sends a greeting to $B$."),
+			math,
+			step("$B$ picks a random number."),
+			math,
+			step("$A$ encrypts that random number."),
+			math,
+			step("A picks its own random number."),
+			math,
+			step("B receives the numbers."),
+			math,
+			step("To finish proving its identity."),
+			math,
+			math,
+			math,
+			step("A picks its own random number."),
+			math,
+			step("Attacker intercepts."),
+			step("A responds to the second instance."),
+			step("C intercepts the response."),
+			step("A responses to the first instance."),
+			step("The second instance can be aborted."),
+			"</ol>",
+		].join("");
+		applyOrderedListStarts(root, protocol);
+		expect(
+			markersFor(root, [
+				"$A$ sends a greeting to $B$.",
+				"$B$ picks a random number.",
+				"$A$ encrypts that random number.",
+			]),
+		).toEqual(["1", "2", "3"]);
+		expect(
+			markersFor(root, ["A picks its own random number.", "B receives the numbers.", "To finish proving its identity."]),
+		).toEqual(["1", "2", "3"]);
+		expect(
+			markersFor(root, [
+				"Attacker intercepts.",
+				"A responds to the second instance.",
+				"C intercepts the response.",
+				"A responses to the first instance.",
+				"The second instance can be aborted.",
+			]),
+		).toEqual(["2", "3", "4", "5", "6"]);
+		const flawStart = [...root.querySelectorAll("li")].filter((li) => li.textContent === "A picks its own random number.");
+		expect(flawStart.map((li) => li.getAttribute("value"))).toEqual(["1", "1"]);
+		expect(root.querySelector(".pagina-ol-marker")).toBeNull();
+	});
+});
+
+function markersFor(root: ParentNode, labels: string[]): string[] {
+	return labels.map((label) => {
+		const li = [...root.querySelectorAll("li")].find((node) => node.textContent === label);
+		expect(li?.parentElement?.tagName).toBe("OL");
+		expect(li?.parentElement?.getAttribute("start")).toBe(li?.getAttribute("value"));
+		return li?.getAttribute("value") ?? "";
+	});
+}
 
 describe("css sanitize", () => {
 	it("replaces unsupported color functions", () => {
@@ -90,6 +450,9 @@ describe("settings", () => {
 		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
 		expect(settings.centerNoteTitle).toBe(false);
+		expect(settings.showProperties).toBe(false);
+		expect(normalizeSettings({ showProperties: true }).showProperties).toBe(true);
+		expect(normalizeSettings({ showProperties: "yes" }).showProperties).toBe(false);
 		expect(settings.header.fontSizePt).toBe(6.75);
 		expect(settings.footer.fontSizePt).toBe(6.75);
 	});
@@ -116,6 +479,8 @@ describe("settings", () => {
 		};
 		const tab = new PaginaSettingTab({} as never, plugin as never);
 		const keys = JSON.stringify(tab.getSettingDefinitions());
+		expect(keys).toContain('"key":"showProperties"');
+		expect(keys).toContain("Include note title");
 		expect(keys).toContain('"key":"header.fontSizePt"');
 		expect(keys).toContain('"key":"footer.fontSizePt"');
 		await tab.setControlValue("header.fontSizePt", 14);
@@ -255,6 +620,19 @@ describe("exam cheat sheet", () => {
 		const img = root.querySelector("img");
 		expect(img?.previousElementSibling?.textContent).toContain("before");
 		expect(img?.nextElementSibling?.textContent).toBe("after");
+	});
+
+	it("keeps the properties block intact in continuous layout", () => {
+		const root = document.createElement("div");
+		root.innerHTML = [
+			'<h1 class="__title__">Title</h1>',
+			'<dl class="pagina-properties"><div><dt>tags</dt><dd>a, b</dd></div></dl>',
+			"<p>Body</p>",
+		].join("");
+		applyContinuousText(root);
+		expect(root.querySelector(".pagina-properties dt")?.textContent).toBe("tags");
+		expect(root.querySelector(".pagina-properties dd")?.textContent).toBe("a, b");
+		expect(root.querySelector("p")?.textContent).toContain("Body");
 	});
 
 	it("marks a paragraph that is only a line break", () => {

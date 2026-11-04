@@ -3,6 +3,8 @@ import type { PaginaSettings } from "./types";
 import { clearConspectusEntryLinks, layoutConspectusPageNumbers } from "./toc-layout";
 import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "./cheat-sheet";
 import { sanitizeCssText } from "./css-sanitize";
+import { applyOrderedListStarts } from "./ordered-lists";
+import { propertyRows, resolveNoteTitle } from "./variables";
 import { stampImageRequests } from "./image-fit";
 import {
 	LIGHT_PRINT_SURFACE_VARS,
@@ -840,6 +842,10 @@ export interface RenderNoteOptions {
 	app: App;
 	file: TFile;
 	includeTitle: boolean;
+	/** Typed export title. Blank falls back to the file name. Omitted uses the title property, then the file name. */
+	titleText?: string;
+	/** Print frontmatter properties under the title. */
+	showProperties?: boolean;
 	/** Horizontally center the file-name title. */
 	centerNoteTitle?: boolean;
 	/** Force a new page before each body H1 (CSS; excluded: file-name title). */
@@ -871,6 +877,7 @@ export interface RenderNoteOptions {
 export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	RenderNoteOptions,
 	| "includeTitle"
+	| "showProperties"
 	| "centerNoteTitle"
 	| "pageBreakBeforeH1"
 	| "centerH1"
@@ -886,6 +893,7 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 > {
 	return {
 		includeTitle: settings.includeFileNameAsTitle,
+		showProperties: settings.showProperties,
 		centerNoteTitle: settings.centerNoteTitle,
 		pageBreakBeforeH1: settings.pageBreakBeforeH1,
 		centerH1: settings.centerH1,
@@ -933,6 +941,19 @@ export interface RenderedNote {
 	component: Component;
 }
 
+/** Properties block under the note title. Hidden, not removed, so the export window can show it without a re-render. */
+function appendProperties(viewEl: HTMLElement, frontmatter: object, show: boolean): void {
+	const rows = propertyRows(frontmatter);
+	if (rows.length === 0) return;
+	const list = viewEl.createEl("dl", { cls: "pagina-properties" });
+	if (!show) list.style.display = "none";
+	for (const row of rows) {
+		const item = list.createDiv();
+		item.createEl("dt", { text: row.key });
+		item.createEl("dd", { text: row.value });
+	}
+}
+
 /**
  * Render a note into `body > .print.theme-light > .markdown-preview-view`,
  * the structure Obsidian's print stylesheet and print-to-pdf expect.
@@ -956,11 +977,12 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	viewEl.toggleClass("rtl", Boolean(vaultConfig(app, "rightToLeft")));
 	viewEl.toggleClass("show-properties", vaultConfig(app, "propertiesInDocument") !== "hidden");
 
-	const title = typeof frontmatter.title === "string" && frontmatter.title ? frontmatter.title : file.basename;
+	const title = resolveNoteTitle(frontmatter, file.basename, opts.titleText);
 	viewEl.createEl("h1", { text: title }, (el) => {
 		el.addClass("__title__");
 		el.style.display = includeTitle ? "block" : "none";
 	});
+	appendProperties(viewEl, frontmatter, Boolean(opts.showProperties));
 
 	await MarkdownRenderer.render(app, markdown, viewEl, file.path, component);
 
@@ -1001,6 +1023,7 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 		markCompactSpacers(viewEl);
 	}
 	if (opts.cheatSheet) applyCheatSheetTitleFont(viewEl);
+	applyOrderedListStarts(viewEl, markdown);
 
 	return {
 		printEl,

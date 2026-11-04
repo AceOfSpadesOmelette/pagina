@@ -23,6 +23,7 @@ import {
 	type RenderedNote,
 } from "./render";
 import { prepareConspectusForPrint } from "./print-styles";
+import { resolveNoteTitle } from "./variables";
 
 type PreviewMode = "html" | "pdf";
 
@@ -30,6 +31,8 @@ export class PaginaExportModal extends Modal {
 	plugin: PaginaPlugin;
 	file: TFile;
 	draft: PaginaSettings;
+	/** Export-only title. Not written into the note or plugin settings. */
+	private noteTitle: string;
 
 	private exporting = false;
 	private mode: PreviewMode = "html";
@@ -60,6 +63,8 @@ export class PaginaExportModal extends Modal {
 		this.plugin = plugin;
 		this.file = file;
 		this.draft = structuredClone(plugin.settings);
+		const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
+		this.noteTitle = resolveNoteTitle(frontmatter, file.basename);
 	}
 
 	onOpen(): void {
@@ -161,6 +166,13 @@ export class PaginaExportModal extends Modal {
 		renderPaginaSettings(scroll, this.draft, {
 			onRebuild: () => this.renderSettings(),
 			onChange: () => this.onDraftChange(),
+			noteTitle: {
+				value: this.noteTitle,
+				placeholder: this.file.basename,
+				onChange: (value) => {
+					this.noteTitle = value;
+				},
+			},
 		});
 
 		const actions = pane.createDiv({ cls: "pagina-export-actions" });
@@ -217,6 +229,8 @@ export class PaginaExportModal extends Modal {
 		const refreshStructure = this.needsFreshRender();
 		if (refreshStructure) this.invalidateRender();
 		this.toggleTitle(this.draft.includeFileNameAsTitle);
+		this.toggleProperties(this.draft.showProperties);
+		this.applyNoteTitle();
 		this.applyH1Styles();
 		this.applyScale();
 		if (message) {
@@ -256,6 +270,24 @@ export class PaginaExportModal extends Modal {
 			root?.querySelectorAll("h1.__title__").forEach((el) => {
 				if (!el.instanceOf(HTMLElement)) return;
 				el.style.display = display;
+			});
+		}
+	}
+
+	private toggleProperties(show: boolean): void {
+		for (const root of [this.rendered?.printEl, this.previewClone]) {
+			root?.querySelectorAll(".pagina-properties").forEach((el) => {
+				if (!el.instanceOf(HTMLElement)) return;
+				el.style.display = show ? "" : "none";
+			});
+		}
+	}
+
+	private applyNoteTitle(): void {
+		const text = resolveNoteTitle(undefined, this.file.basename, this.noteTitle);
+		for (const root of [this.rendered?.printEl, this.previewClone]) {
+			root?.querySelectorAll("h1.__title__").forEach((el) => {
+				el.textContent = text;
 			});
 		}
 	}
@@ -327,6 +359,7 @@ export class PaginaExportModal extends Modal {
 				app: this.app,
 				file: this.file,
 				...renderFlagsFromSettings(this.draft),
+				titleText: this.noteTitle,
 			});
 			if (gen !== this.structureGen) {
 				rendered.cleanup();
@@ -341,6 +374,7 @@ export class PaginaExportModal extends Modal {
 					app: this.app,
 					file: this.file,
 					...renderFlagsFromSettings(this.draft),
+					titleText: this.noteTitle,
 				});
 				if (gen !== this.structureGen) {
 					rendered.cleanup();
@@ -351,6 +385,9 @@ export class PaginaExportModal extends Modal {
 			prepareConspectusForPrint(rendered.contentEl);
 			this.rendered = rendered;
 			this.mountHtmlPreview();
+			this.toggleTitle(this.draft.includeFileNameAsTitle);
+			this.toggleProperties(this.draft.showProperties);
+			this.applyNoteTitle();
 			this.applyScale();
 		})();
 		this.renderPromise = promise;
@@ -400,15 +437,19 @@ export class PaginaExportModal extends Modal {
 		}, 300);
 	}
 
+	private pdfCacheKey(): string {
+		return JSON.stringify({ draft: this.draft, noteTitle: this.noteTitle });
+	}
+
 	private ensurePdfBytes(): Promise<Uint8Array> {
-		const key = JSON.stringify(this.draft);
+		const key = this.pdfCacheKey();
 		const cached = this.pdfCache.get(key);
 		if (cached) return Promise.resolve(cached);
 		const pending = this.inflight.get(key);
 		if (pending) return pending;
 		const settings = structuredClone(this.draft);
 		const reuseRender = this.rendered ?? undefined;
-		const job = buildPdfBytes(this.app, this.file, settings, reuseRender)
+		const job = buildPdfBytes(this.app, this.file, settings, reuseRender, undefined, this.noteTitle)
 			.then(({ bytes }) => {
 				this.pdfCache.set(key, bytes);
 				return bytes;
@@ -528,7 +569,13 @@ export class PaginaExportModal extends Modal {
 			} else {
 				setProgress("Pagina: opening the print dialog…");
 				this.discardPreviewRender();
-				const outPath = await exportNoteWithoutElectron(this.app, this.file, this.plugin.settings, setProgress);
+				const outPath = await exportNoteWithoutElectron(
+					this.app,
+					this.file,
+					this.plugin.settings,
+					setProgress,
+					this.noteTitle,
+				);
 				notice.hide();
 				this.setExportStatus(null);
 				new Notice(

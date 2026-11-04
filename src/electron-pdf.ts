@@ -7,6 +7,7 @@ import { emMm, lineMm, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-lay
 import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { slotSpansForTexts } from "./slot-wrap";
+import { restampOrderedLists } from "./ordered-lists";
 import { formatTimestamp, renderTemplate, type VariableContext } from "./variables";
 
 interface IpcRendererLike {
@@ -392,6 +393,7 @@ export async function printElementToPdf(
 		await sleep(200);
 
 		try {
+			restampOrderedLists(printEl);
 			await new Promise<void>((resolve, reject) => {
 				const timer = window.setTimeout(() => reject(new Error("print-to-pdf timed out")), 60000);
 				ipc.once("print-to-pdf", () => {

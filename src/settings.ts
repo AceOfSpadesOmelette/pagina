@@ -189,15 +189,20 @@ export class PaginaSettingTab extends PluginSettingTab {
 				heading: "Document",
 				items: [
 					{
-						name: "Include file name as title",
-						desc: "Show the note name at the top of the export.",
+						name: "Include note title",
+						desc: "Show the note title at the top of the export.",
 						control: { type: "toggle", key: "includeFileNameAsTitle" },
 					},
 					{
 						name: "Center note title",
-						desc: "Horizontally center the file-name title.",
+						desc: "Horizontally center the note title.",
 						visible: () => this.plugin.settings.includeFileNameAsTitle,
 						control: { type: "toggle", key: "centerNoteTitle" },
+					},
+					{
+						name: "Include properties",
+						desc: "Print the note's properties under the title.",
+						control: { type: "toggle", key: "showProperties" },
 					},
 				],
 			},
@@ -207,17 +212,17 @@ export class PaginaSettingTab extends PluginSettingTab {
 				items: [
 					{
 						name: "Page break before H1",
-						desc: "Start a new page at each heading 1 after the first (not the file-name title).",
+						desc: "Start a new page at each heading 1 after the first (not the note title).",
 						control: { type: "toggle", key: "pageBreakBeforeH1" },
 					},
 					{
 						name: "Center H1",
-						desc: "Horizontally center heading 1 text (not the file-name title).",
+						desc: "Horizontally center heading 1 text (not the note title).",
 						control: { type: "toggle", key: "centerH1" },
 					},
 					{
 						name: "Underline H1",
-						desc: "Underline heading 1 text (not the file-name title).",
+						desc: "Underline heading 1 text (not the note title).",
 						control: { type: "toggle", key: "underlineH1" },
 					},
 				],

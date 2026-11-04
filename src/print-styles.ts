@@ -248,6 +248,27 @@ ${LIGHT_PRINT_SURFACE_CSS}
 .print.pagina-print.pagina-center-title h1.__title__ {
   text-align: center;
 }
+.print.pagina-print .markdown-preview-view ol > li {
+  display: list-item;
+  list-style: decimal outside;
+}
+.print.pagina-print dl.pagina-properties {
+  margin: 0 0 0.75rem;
+  page-break-inside: avoid;
+}
+.print.pagina-print dl.pagina-properties > div {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  margin: 0;
+}
+.print.pagina-print dl.pagina-properties dt {
+  font-weight: 700;
+  margin: 0;
+}
+.print.pagina-print dl.pagina-properties dd {
+  margin: 0;
+}
 .print.pagina-print.pagina-center-h1 h1:not(.__title__):not(.conspectus-toc-title) {
   text-align: center;
 }

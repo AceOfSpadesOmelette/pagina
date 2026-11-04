@@ -11,9 +11,17 @@ import {
 import { cheatSheetColumnBounds, clampCheatSheetColumns, clampSlotFontSize, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, SLOT_FONT_DEFAULT_PT, SLOT_FONT_MAX_PT, SLOT_FONT_MIN_PT, SLOT_FONT_STEP_PT } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
+export interface NoteTitleField {
+	value: string;
+	placeholder?: string;
+	onChange: (value: string) => void;
+}
+
 export interface RenderPaginaSettingsOptions {
 	onRebuild: () => void;
 	onChange?: () => void | Promise<void>;
+	/** Export window only. The plugin settings tab has no per-note title. */
+	noteTitle?: NoteTitleField;
 }
 
 /**
@@ -105,8 +113,8 @@ export function renderPaginaSettings(
 	new Setting(container).setName("Document").setHeading();
 
 	new Setting(container)
-		.setName("Include file name as title")
-		.setDesc("Show the note name at the top of the export.")
+		.setName("Include note title")
+		.setDesc("Show the note title at the top of the export.")
 		.addToggle((t) =>
 			t.setValue(settings.includeFileNameAsTitle).onChange((v) => {
 				settings.includeFileNameAsTitle = v;
@@ -115,10 +123,29 @@ export function renderPaginaSettings(
 			}),
 		);
 
+	const noteTitle = opts.noteTitle;
+	if (settings.includeFileNameAsTitle && noteTitle) {
+		new Setting(container)
+			.setName("Note title")
+			.setDesc(
+				"Printed at the top and used for {{title}}. Leave blank to use the file name. This is not saved into the note.",
+			)
+			.addText((text) => {
+				text
+					.setPlaceholder(noteTitle.placeholder ?? "")
+					.setValue(noteTitle.value)
+					.onChange((value) => {
+						noteTitle.onChange(value);
+						notify();
+					});
+				text.inputEl.style.width = "100%";
+			});
+	}
+
 	if (settings.includeFileNameAsTitle) {
 		new Setting(container)
 			.setName("Center note title")
-			.setDesc("Horizontally center the file-name title.")
+			.setDesc("Horizontally center the note title.")
 			.addToggle((t) =>
 				t.setValue(settings.centerNoteTitle).onChange((v) => {
 					settings.centerNoteTitle = v;
@@ -127,11 +154,21 @@ export function renderPaginaSettings(
 			);
 	}
 
+	new Setting(container)
+		.setName("Include properties")
+		.setDesc("Print the note's properties under the title.")
+		.addToggle((t) =>
+			t.setValue(settings.showProperties).onChange((v) => {
+				settings.showProperties = v;
+				notify();
+			}),
+		);
+
 	new Setting(container).setName("Heading 1").setHeading();
 
 	new Setting(container)
 		.setName("Page break before h1")
-		.setDesc("Start a new page at each heading 1 after the first (not the file-name title).")
+		.setDesc("Start a new page at each heading 1 after the first (not the note title).")
 		.addToggle((t) =>
 			t.setValue(settings.pageBreakBeforeH1).onChange((v) => {
 				settings.pageBreakBeforeH1 = v;
@@ -141,7 +178,7 @@ export function renderPaginaSettings(
 
 	new Setting(container)
 		.setName("Center h1")
-		.setDesc("Horizontally center heading 1 text (not the file-name title).")
+		.setDesc("Horizontally center heading 1 text (not the note title).")
 		.addToggle((t) =>
 			t.setValue(settings.centerH1).onChange((v) => {
 				settings.centerH1 = v;
@@ -151,7 +188,7 @@ export function renderPaginaSettings(
 
 	new Setting(container)
 		.setName("Underline h1")
-		.setDesc("Underline heading 1 text (not the file-name title).")
+		.setDesc("Underline heading 1 text (not the note title).")
 		.addToggle((t) =>
 			t.setValue(settings.underlineH1).onChange((v) => {
 				settings.underlineH1 = v;
