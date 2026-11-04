@@ -946,7 +946,7 @@ function appendProperties(viewEl: HTMLElement, frontmatter: object, show: boolea
 	const rows = propertyRows(frontmatter);
 	if (rows.length === 0) return;
 	const list = viewEl.createEl("dl", { cls: "pagina-properties" });
-	if (!show) list.style.display = "none";
+	list.toggleClass("pagina-properties-hidden", !show);
 	for (const row of rows) {
 		const item = list.createDiv();
 		item.createEl("dt", { text: row.key });

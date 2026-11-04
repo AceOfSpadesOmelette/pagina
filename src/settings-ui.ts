@@ -138,7 +138,7 @@ export function renderPaginaSettings(
 						noteTitle.onChange(value);
 						notify();
 					});
-				text.inputEl.style.width = "100%";
+				text.inputEl.setCssProps({ width: "100%" });
 			});
 	}
 

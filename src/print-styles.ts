@@ -256,6 +256,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
   margin: 0 0 0.75rem;
   page-break-inside: avoid;
 }
+.print.pagina-print dl.pagina-properties.pagina-properties-hidden {
+  display: none;
+}
 .print.pagina-print dl.pagina-properties > div {
   display: grid;
   grid-template-columns: max-content 1fr;

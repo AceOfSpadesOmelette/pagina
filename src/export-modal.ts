@@ -278,7 +278,7 @@ export class PaginaExportModal extends Modal {
 		for (const root of [this.rendered?.printEl, this.previewClone]) {
 			root?.querySelectorAll(".pagina-properties").forEach((el) => {
 				if (!el.instanceOf(HTMLElement)) return;
-				el.style.display = show ? "" : "none";
+				el.toggleClass("pagina-properties-hidden", !show);
 			});
 		}
 	}
