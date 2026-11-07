@@ -451,6 +451,9 @@ describe("settings", () => {
 		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
 		expect(settings.centerNoteTitle).toBe(false);
+		expect(settings.noteTitleGapMm).toBe(0);
+		expect(normalizeSettings({ noteTitleGapMm: -4 }).noteTitleGapMm).toBe(0);
+		expect(normalizeSettings({ noteTitleGapMm: 6.24 }).noteTitleGapMm).toBe(6.2);
 		expect(settings.showProperties).toBe(false);
 		expect(normalizeSettings({ showProperties: true }).showProperties).toBe(true);
 		expect(normalizeSettings({ showProperties: "yes" }).showProperties).toBe(false);
@@ -587,6 +590,7 @@ describe("exam cheat sheet", () => {
 		});
 		expect(el.classList.contains("pagina-break-h1")).toBe(false);
 		expect(el.classList.contains("pagina-center-title")).toBe(false);
+		expect(el.style.getPropertyValue("--pagina-title-gap")).toBe("0mm");
 		expect(el.classList.contains("pagina-cheat-sheet")).toBe(true);
 		expect(el.classList.contains("pagina-cheat-compact")).toBe(true);
 		expect(el.classList.contains("pagina-uniform-text")).toBe(true);
@@ -594,8 +598,9 @@ describe("exam cheat sheet", () => {
 		expect(el.classList.contains("pagina-body-font")).toBe(true);
 		expect(el.style.getPropertyValue("--pagina-body-font-size")).toBe("12px");
 		expect(el.style.getPropertyValue("--pagina-cheat-columns")).toBe("4");
-		applyH1StyleClasses(el, { centerNoteTitle: true, cheatSheet: true });
+		applyH1StyleClasses(el, { centerNoteTitle: true, cheatSheet: true, noteTitleGapMm: 8 });
 		expect(el.classList.contains("pagina-center-title")).toBe(true);
+		expect(el.style.getPropertyValue("--pagina-title-gap")).toBe("8mm");
 		applyH1StyleClasses(el, { centerNoteTitle: false, cheatSheet: true });
 		expect(el.classList.contains("pagina-center-title")).toBe(false);
 		applyCheatSheetClasses(el, { cheatSheet: false });

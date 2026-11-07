@@ -5,7 +5,7 @@
 }
 
 #pagina-export .print-preview {
-	flex: 1;
+	flex: 2 1 0;
 	overflow-x: hidden;
 	overflow-y: scroll;
 	position: relative;
@@ -16,7 +16,9 @@
 }
 
 #pagina-export .setting-wrapper {
-	width: 320px;
+	flex: 3 1 0;
+	width: auto;
+	min-width: 0;
 	margin-left: 16px;
 	display: flex;
 	flex-direction: column;
@@ -42,6 +44,10 @@
 	flex-direction: column;
 	height: min(85vh, 100%);
 	gap: 8px;
+}
+
+#pagina-export.pagina-export-mobile .print-preview {
+	flex: 1 1 auto;
 }
 
 #pagina-export.pagina-export-mobile.pagina-no-preview .print-preview {
@@ -77,6 +83,28 @@
 
 #pagina-export .setting-wrapper .setting-item[hidden] {
 	display: none;
+}
+
+#pagina-export .setting-wrapper .setting-item {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 6px;
+}
+
+#pagina-export .setting-wrapper .setting-item-info,
+#pagina-export .setting-wrapper .setting-item-control {
+	width: 100%;
+}
+
+#pagina-export .setting-wrapper .setting-item-control {
+	justify-content: stretch;
+}
+
+#pagina-export .pagina-wrap-field {
+	width: 100%;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	resize: vertical;
 }
 
 .pagina-preview-disabled {
@@ -329,6 +357,9 @@
 	.print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
 		page-break-before: always;
 	}
+	.print.pagina-print h1.__title__ {
+		margin-top: var(--pagina-title-gap, 0mm);
+	}
 	.print.pagina-print.pagina-center-title h1.__title__ {
 		text-align: center;
 	}
@@ -405,6 +436,9 @@
 	color: #222222;
 	-webkit-print-color-adjust: exact;
 	print-color-adjust: exact;
+}
+.print.pagina-print h1.__title__ {
+	margin-top: var(--pagina-title-gap, 0mm);
 }
 .print.pagina-print .markdown-preview-view ol > li {
 	display: list-item;
@@ -557,10 +591,12 @@ img.__canvas__ {
 	padding: 0;
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > :first-child,
-.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + *,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + * > :first-child {
 	margin-top: 0;
+}
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ {
+	margin-top: var(--pagina-title-gap, 0mm);
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
 	line-height: 1.05;
@@ -635,7 +671,7 @@ img.__canvas__ {
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view h1.__title__ {
 	font-family: inherit;
 	text-align: center;
-	margin: 0 0 1mm;
+	margin: var(--pagina-title-gap, 0mm) 0 1mm;
 	line-height: 1.05;
 	font-size: var(--pagina-cheat-font-size, 11px);
 }

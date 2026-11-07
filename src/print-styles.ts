@@ -51,10 +51,12 @@ export const CHEAT_SHEET_CSS = `
   padding: 0;
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > :first-child,
-.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + *,
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ + * > :first-child {
   margin-top: 0;
+}
+.print.pagina-print.pagina-cheat-sheet .markdown-preview-view > h1.__title__ {
+  margin-top: var(--pagina-title-gap, 0mm);
 }
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
   line-height: 1.05;
@@ -129,7 +131,7 @@ export const CHEAT_SHEET_CSS = `
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view h1.__title__ {
   font-family: inherit;
   text-align: center;
-  margin: 0 0 1mm;
+  margin: var(--pagina-title-gap, 0mm) 0 1mm;
   line-height: 1.05;
   font-size: var(--pagina-cheat-font-size, 11px);
 }
@@ -253,6 +255,9 @@ ${LIGHT_PRINT_SURFACE_CSS}
 /* Skip the first body H1 so the optional file-name title is not left alone on a page. */
 .print.pagina-print.pagina-break-h1 h1:not(.__title__):not(.conspectus-toc-title) ~ h1:not(.__title__):not(.conspectus-toc-title) {
   page-break-before: always;
+}
+.print.pagina-print h1.__title__ {
+  margin-top: var(--pagina-title-gap, 0mm);
 }
 .print.pagina-print.pagina-center-title h1.__title__ {
   text-align: center;

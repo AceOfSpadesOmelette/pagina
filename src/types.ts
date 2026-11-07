@@ -71,6 +71,8 @@ export interface PaginaSettings {
 	includeFileNameAsTitle: boolean;
 	/** Horizontally center the file-name title. */
 	centerNoteTitle: boolean;
+	/** Millimetres between the header and the note title. Does not move body headings. */
+	noteTitleGapMm: number;
 	/** Print the note's properties under the title. */
 	showProperties: boolean;
 	/** Start a new PDF page at each body H1 (excludes the file-name title). */
@@ -123,6 +125,7 @@ export interface PaginaSettings {
 export const DEFAULT_SETTINGS: PaginaSettings = {
 	includeFileNameAsTitle: true,
 	centerNoteTitle: false,
+	noteTitleGapMm: 0,
 	showProperties: false,
 	pageBreakBeforeH1: false,
 	centerH1: false,
@@ -200,6 +203,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		maxHeadingLevel,
 		pageBreakBeforeH1: data.pageBreakBeforeH1 ?? DEFAULT_SETTINGS.pageBreakBeforeH1,
 		centerNoteTitle: data.centerNoteTitle ?? DEFAULT_SETTINGS.centerNoteTitle,
+		noteTitleGapMm: clampTitleGapMm(data.noteTitleGapMm),
 		showProperties: data.showProperties === true,
 		centerH1: data.centerH1 ?? DEFAULT_SETTINGS.centerH1,
 		underlineH1: data.underlineH1 ?? DEFAULT_SETTINGS.underlineH1,
@@ -274,6 +278,18 @@ export function migratedTextPx(px: unknown, legacyPt: unknown, fallback: number)
 	if (px != null && px !== "") return clampTextPx(px, fallback);
 	if (legacyPt != null && legacyPt !== "") return clampTextPx(ptToPx(Number(legacyPt)), fallback);
 	return fallback;
+}
+
+/** Space above the note title. Negative values become 0. */
+export function clampTitleGapMm(value: unknown): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string" && value.trim() !== ""
+				? Number(value)
+				: Number.NaN;
+	if (!Number.isFinite(parsed) || parsed < 0) return 0;
+	return Math.round(parsed * 10) / 10;
 }
 
 /** PDF point size for a stored pixel size. */

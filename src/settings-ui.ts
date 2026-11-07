@@ -8,7 +8,7 @@ import {
 	downloadSettingsJson,
 	parseSettingsJson,
 } from "./settings-io";
-import { cheatSheetColumnBounds, clampCheatSheetColumns, clampTextPx, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, TEXT_PX_MAX, TEXT_PX_MIN, TEXT_SIZE_DESC } from "./types";
+import { cheatSheetColumnBounds, clampCheatSheetColumns, clampTextPx, clampTitleGapMm, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, TEXT_PX_MAX, TEXT_PX_MIN, TEXT_SIZE_DESC } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
 export interface NoteTitleField {
@@ -128,21 +128,17 @@ export function renderPaginaSettings(
 
 	const noteTitle = opts.noteTitle;
 	if (settings.includeFileNameAsTitle && noteTitle) {
-		new Setting(container)
-			.setName("Note title")
-			.setDesc(
-				"Printed at the top and used for {{title}}. Leave blank to use the file name. This is not saved into the note.",
-			)
-			.addText((text) => {
-				text
-					.setPlaceholder(noteTitle.placeholder ?? "")
-					.setValue(noteTitle.value)
-					.onChange((value) => {
-						noteTitle.onChange(value);
-						notify();
-					});
-				text.inputEl.setCssProps({ width: "100%" });
-			});
+		addWrappedText(new Setting(container).setName("Note title").setDesc(
+			"Printed at the top and used for {{title}}. Leave blank to use the file name. This is not saved into the note.",
+		), {
+			value: noteTitle.value,
+			placeholder: noteTitle.placeholder,
+			rows: 2,
+			onChange: (value) => {
+				noteTitle.onChange(value);
+				notify();
+			},
+		});
 	}
 
 	if (settings.includeFileNameAsTitle) {
@@ -155,6 +151,19 @@ export function renderPaginaSettings(
 					notify();
 				}),
 			);
+		new Setting(container)
+			.setName("Space above note title")
+			.setDesc("Millimetres between the header and the note title. Heading 1 is unchanged.")
+			.addText((text) => {
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.step = "0.5";
+				text.setValue(String(settings.noteTitleGapMm)).onChange((value) => {
+					if (value.trim() === "" || !Number.isFinite(Number(value))) return;
+					settings.noteTitleGapMm = clampTitleGapMm(value);
+					notify();
+				});
+			});
 	}
 
 	new Setting(container)
@@ -530,6 +539,19 @@ function setPositive(value: string, assign: (n: number) => void, notify: () => v
 	}
 }
 
+function addWrappedText(
+	setting: Setting,
+	spec: { value: string; placeholder?: string; rows?: number; onChange: (value: string) => void },
+): void {
+	setting.addTextArea((area) => {
+		if (spec.placeholder) area.setPlaceholder(spec.placeholder);
+		area.setValue(spec.value).onChange(spec.onChange);
+		area.inputEl.rows = spec.rows ?? 2;
+		area.inputEl.wrap = "soft";
+		area.inputEl.addClass("pagina-wrap-field");
+	});
+}
+
 function setNonNegative(value: string, assign: (n: number) => void, notify: () => void): void {
 	const n = Number(value);
 	if (!Number.isNaN(n) && n >= 0) {
@@ -548,24 +570,27 @@ function addSlotSettings(
 	slots: HeaderFooterSlots,
 	notify: () => void,
 ): void {
-	new Setting(container).setName(`${label} left`).addText((t) =>
-		t.setValue(slots.left).onChange((v) => {
-			slots.left = v;
+	addWrappedText(new Setting(container).setName(`${label} left`), {
+		value: slots.left,
+		onChange: (value) => {
+			slots.left = value;
 			notify();
-		}),
-	);
-	new Setting(container).setName(`${label} center`).addText((t) =>
-		t.setValue(slots.center).onChange((v) => {
-			slots.center = v;
+		},
+	});
+	addWrappedText(new Setting(container).setName(`${label} center`), {
+		value: slots.center,
+		onChange: (value) => {
+			slots.center = value;
 			notify();
-		}),
-	);
-	new Setting(container).setName(`${label} right`).addText((t) =>
-		t.setValue(slots.right).onChange((v) => {
-			slots.right = v;
+		},
+	});
+	addWrappedText(new Setting(container).setName(`${label} right`), {
+		value: slots.right,
+		onChange: (value) => {
+			slots.right = value;
 			notify();
-		}),
-	);
+		},
+	});
 
 	new Setting(container).setName(`${label} border style`).addDropdown((dd) => {
 		for (const border of HEADER_BORDERS) {
@@ -577,39 +602,43 @@ function addSlotSettings(
 		});
 	});
 
-	new Setting(container).setName(`${label} border color`).addText((t) => {
-		t.setPlaceholder("#000000")
-			.setValue(slots.borderColor || "#000000")
-			.onChange((v) => {
-				if (isValidHexColor(v) || v === "") {
-					slots.borderColor = v || "#000000";
-					notify();
-				}
-			});
+	addWrappedText(new Setting(container).setName(`${label} border color`), {
+		value: slots.borderColor || "#000000",
+		placeholder: "#000000",
+		rows: 1,
+		onChange: (value) => {
+			if (isValidHexColor(value) || value === "") {
+				slots.borderColor = value || "#000000";
+				notify();
+			}
+		},
 	});
 
-	new Setting(container).setName(`${label} text color`).addText((t) => {
-		t.setPlaceholder("#555555")
-			.setValue(slots.textColor || "#555555")
-			.onChange((v) => {
-				if (isValidHexColor(v) || v === "") {
-					slots.textColor = v || "#555555";
-					notify();
-				}
-			});
+	addWrappedText(new Setting(container).setName(`${label} text color`), {
+		value: slots.textColor || "#555555",
+		placeholder: "#555555",
+		rows: 1,
+		onChange: (value) => {
+			if (isValidHexColor(value) || value === "") {
+				slots.textColor = value || "#555555";
+				notify();
+			}
+		},
 	});
 
-	new Setting(container)
-		.setName(`${label} font`)
-		.setDesc(`Leave blank to match Obsidian: ${obsidianFontLabel()}`)
-		.addText((t) => {
-			t.setPlaceholder("E.g. Georgia, times new roman")
-				.setValue(slots.fontFamily || "")
-				.onChange((v) => {
-					slots.fontFamily = v.trim();
-					notify();
-				});
-		});
+	addWrappedText(
+		new Setting(container)
+			.setName(`${label} font`)
+			.setDesc(`Leave blank to match Obsidian: ${obsidianFontLabel()}`),
+		{
+			value: slots.fontFamily || "",
+			placeholder: "E.g. Georgia, times new roman",
+			onChange: (value) => {
+				slots.fontFamily = value.trim();
+				notify();
+			},
+		},
+	);
 
 	new Setting(container)
 		.setName(`${label} text size`)

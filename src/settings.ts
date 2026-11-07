@@ -14,6 +14,7 @@ import {
 	cheatSheetColumnChoices,
 	clampCheatSheetColumns,
 	clampTextPx,
+	clampTitleGapMm,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
 	type HeaderFooterSlots,
@@ -116,6 +117,11 @@ export class PaginaSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 			return;
 		}
+		if (key === "noteTitleGapMm") {
+			settings.noteTitleGapMm = clampTitleGapMm(value);
+			await this.plugin.saveSettings();
+			return;
+		}
 		await super.setControlValue(key, value);
 		if (
 			key === "pageSize" ||
@@ -203,6 +209,12 @@ export class PaginaSettingTab extends PluginSettingTab {
 						desc: "Horizontally center the note title.",
 						visible: () => this.plugin.settings.includeFileNameAsTitle,
 						control: { type: "toggle", key: "centerNoteTitle" },
+					},
+					{
+						name: "Space above note title",
+						desc: "Millimetres between the header and the note title. Heading 1 is unchanged.",
+						visible: () => this.plugin.settings.includeFileNameAsTitle,
+						control: { type: "number", key: "noteTitleGapMm", min: 0, step: 0.5 },
 					},
 					{
 						name: "Include properties",
@@ -430,7 +442,7 @@ export class PaginaSettingTab extends PluginSettingTab {
 		const text = (name: string, field: SlotField): SettingDefinition => ({
 			name,
 			visible,
-			control: { type: "text", key: `${which}.${field}` },
+			control: { type: "textarea", key: `${which}.${field}`, rows: 2 },
 		});
 		const borders: Record<string, string> = {};
 		for (const border of HEADER_BORDERS) borders[border.id] = border.label;
@@ -448,18 +460,18 @@ export class PaginaSettingTab extends PluginSettingTab {
 			{
 				name: `${label} border color`,
 				visible,
-				control: { type: "text", key: `${which}.borderColor`, placeholder: "#000000" },
+				control: { type: "textarea", key: `${which}.borderColor`, placeholder: "#000000", rows: 1 },
 			},
 			{
 				name: `${label} text color`,
 				visible,
-				control: { type: "text", key: `${which}.textColor`, placeholder: "#555555" },
+				control: { type: "textarea", key: `${which}.textColor`, placeholder: "#555555", rows: 1 },
 			},
 			{
 				name: `${label} font`,
 				desc: `Leave blank to match Obsidian: ${obsidianFontLabel()}`,
 				visible,
-				control: { type: "text", key: `${which}.fontFamily`, placeholder: "e.g. Georgia, Times New Roman" },
+				control: { type: "textarea", key: `${which}.fontFamily`, placeholder: "e.g. Georgia, Times New Roman", rows: 2 },
 			},
 			{
 				name: `${label} text size`,

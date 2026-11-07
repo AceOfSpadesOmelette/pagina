@@ -264,7 +264,7 @@ ${slot("left", left, percents[0] ?? 0)}${slot("center", center, percents[1] ?? 0
 </div>`;
 	if (omitText && !rule) return "<span></span>";
 	const body = edge === "header" ? `${row}${gapHtml}${ruleHtml}` : `${ruleHtml}${gapHtml}${row}`;
-	return `<div style="width:100%;height:100%;box-sizing:border-box;font-size:${emPx}px;line-height:${linePx}px;font-family:${fontFamily};color:${textColor};padding-left:${marginLeftIn}in;padding-right:${marginRightIn}in;display:flex;flex-direction:column;justify-content:${justify};">${body}</div>`;
+	return `<div style="width:100%;height:100vh;box-sizing:border-box;font-size:${emPx}px;line-height:${linePx}px;font-family:${fontFamily};color:${textColor};padding-left:${marginLeftIn}in;padding-right:${marginRightIn}in;display:flex;flex-direction:column;justify-content:${justify};">${body}</div>`;
 }
 
 export interface ElectronPrintExtras {

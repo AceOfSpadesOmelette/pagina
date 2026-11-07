@@ -1,5 +1,5 @@
 import { App, Component, type FrontMatterCache, MarkdownRenderer, Platform, requestUrl, TFile } from "obsidian";
-import type { PaginaSettings } from "./types";
+import { clampTitleGapMm, type PaginaSettings } from "./types";
 import { clearConspectusEntryLinks, layoutConspectusPageNumbers } from "./toc-layout";
 import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "./cheat-sheet";
 import { sanitizeCssText } from "./css-sanitize";
@@ -848,6 +848,8 @@ export interface RenderNoteOptions {
 	showProperties?: boolean;
 	/** Horizontally center the file-name title. */
 	centerNoteTitle?: boolean;
+	/** Millimetres above the note title, not body headings. */
+	noteTitleGapMm?: number;
 	/** Force a new page before each body H1 (CSS; excluded: file-name title). */
 	pageBreakBeforeH1?: boolean;
 	/** Center body H1s (excluded: file-name title). */
@@ -880,6 +882,7 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	| "includeTitle"
 	| "showProperties"
 	| "centerNoteTitle"
+	| "noteTitleGapMm"
 	| "pageBreakBeforeH1"
 	| "centerH1"
 	| "underlineH1"
@@ -897,6 +900,7 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 		includeTitle: settings.includeFileNameAsTitle,
 		showProperties: settings.showProperties,
 		centerNoteTitle: settings.centerNoteTitle,
+		noteTitleGapMm: settings.noteTitleGapMm,
 		pageBreakBeforeH1: settings.pageBreakBeforeH1,
 		centerH1: settings.centerH1,
 		underlineH1: settings.underlineH1,
@@ -918,6 +922,7 @@ export function applyH1StyleClasses(
 	opts: Pick<
 		RenderNoteOptions,
 		| "centerNoteTitle"
+		| "noteTitleGapMm"
 		| "pageBreakBeforeH1"
 		| "centerH1"
 		| "underlineH1"
@@ -931,6 +936,7 @@ export function applyH1StyleClasses(
 	>,
 ): void {
 	printEl.toggleClass("pagina-center-title", Boolean(opts.centerNoteTitle));
+	printEl.style.setProperty("--pagina-title-gap", `${clampTitleGapMm(opts.noteTitleGapMm)}mm`);
 	printEl.toggleClass("pagina-break-h1", Boolean(opts.pageBreakBeforeH1) && !opts.cheatSheet);
 	printEl.toggleClass("pagina-center-h1", Boolean(opts.centerH1));
 	printEl.toggleClass("pagina-underline-h1", Boolean(opts.underlineH1));
