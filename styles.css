@@ -323,6 +323,8 @@
 		border-collapse: collapse;
 		width: 100%;
 		max-width: 100%;
+		margin-block-start: 0;
+		margin-block-end: 0;
 	}
 	.print.pagina-print table th,
 	.print.pagina-print table td {
@@ -516,6 +518,8 @@
 	width: 100%;
 	max-width: 100%;
 	page-break-inside: auto;
+	margin-block-start: 0;
+	margin-block-end: 0;
 }
 .print.pagina-print table th,
 .print.pagina-print table td {

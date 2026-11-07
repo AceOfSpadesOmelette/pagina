@@ -15,7 +15,7 @@ import {
 	PRINT_CSS,
 	shiftWordDeficits,
 } from "../src/print-styles";
-import { applyH1StyleClasses, labelCodeBlockLanguages } from "../src/render";
+import { applyH1StyleClasses, dropBlankLineBeforeTables, labelCodeBlockLanguages } from "../src/render";
 import { isPhoneSession } from "../src/session";
 import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
 import { applyOrderedListStarts, orderedListStarts } from "../src/ordered-lists";
@@ -657,6 +657,40 @@ describe("exam cheat sheet", () => {
 		expect(root.querySelector(".pagina-properties dt")?.textContent).toBe("tags");
 		expect(root.querySelector(".pagina-properties dd")?.textContent).toBe("a, b");
 		expect(root.querySelector("p")?.textContent).toContain("Body");
+	});
+
+	it("drops the empty paragraph immediately above a table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<p>Intro</p><p><br></p><table><tr><td>a</td></tr></table>";
+		dropBlankLineBeforeTables(root);
+		expect([...root.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["Intro"]);
+		expect(root.querySelector("table td")?.textContent).toBe("a");
+	});
+
+	it("strips only the trailing break on the paragraph above a table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<p><br></p><p>kept</p><p>line one<br>line two<br></p><table><tr><td>a</td></tr></table>";
+		dropBlankLineBeforeTables(root);
+		const paragraphs = [...root.querySelectorAll("p")];
+		expect(paragraphs.map((p) => p.innerHTML)).toEqual(["<br>", "kept", "line one<br>line two"]);
+		expect(root.querySelector("table td")?.textContent).toBe("a");
+	});
+
+	it("drops the empty paragraph immediately under a table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<table><tr><td>a</td></tr></table><p><br></p><p>After</p>";
+		dropBlankLineBeforeTables(root);
+		expect([...root.querySelectorAll("p")].map((p) => p.textContent)).toEqual(["After"]);
+		expect(root.querySelector("table td")?.textContent).toBe("a");
+	});
+
+	it("strips only the leading break on the paragraph under a table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<table><tr><td>a</td></tr></table><p><br>line one<br>line two</p><p>kept</p><p><br></p>";
+		dropBlankLineBeforeTables(root);
+		const paragraphs = [...root.querySelectorAll("p")];
+		expect(paragraphs.map((p) => p.innerHTML)).toEqual(["line one<br>line two", "kept", "<br>"]);
+		expect(root.querySelector("table td")?.textContent).toBe("a");
 	});
 
 	it("marks a paragraph that is only a line break", () => {

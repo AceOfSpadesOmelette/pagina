@@ -172,6 +172,8 @@ ${LIGHT_PRINT_SURFACE_CSS}
   width: 100%;
   max-width: 100%;
   page-break-inside: auto;
+  margin-block-start: 0;
+  margin-block-end: 0;
 }
 .print.pagina-print table.pagina-table-fixed {
   table-layout: fixed;

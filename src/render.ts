@@ -964,6 +964,73 @@ function appendProperties(viewEl: HTMLElement, frontmatter: object, show: boolea
 	}
 }
 
+function blankText(value: string | null): string {
+	return (value ?? "").replace(/\u00a0/g, " ").trim();
+}
+
+function isBlankBlock(el: Element): boolean {
+	if (el.matches("table, .el-table")) return false;
+	return blankText(el.textContent).length === 0;
+}
+
+/** The paragraph that holds a trailing break, when the block is that paragraph or wraps one. */
+function paragraphOf(el: Element): Element {
+	if (el.matches("p")) return el;
+	const child = el.firstElementChild;
+	if (child?.matches("p") && el.childElementCount === 1) return child;
+	return el;
+}
+
+function isBreak(node: ChildNode | null): boolean {
+	return node?.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === "BR";
+}
+
+function stripTrailingBreak(el: Element): void {
+	let last: ChildNode | null = el.lastChild;
+	while (last?.nodeType === Node.TEXT_NODE && blankText(last.textContent).length === 0) {
+		last = last.previousSibling;
+	}
+	if (isBreak(last)) last?.remove();
+}
+
+function stripLeadingBreak(el: Element): void {
+	let first: ChildNode | null = el.firstChild;
+	while (first?.nodeType === Node.TEXT_NODE && blankText(first.textContent).length === 0) {
+		first = first.nextSibling;
+	}
+	if (isBreak(first)) first?.remove();
+}
+
+/**
+ * Drop a blank line that touches a table. Above it, that is an empty block or a
+ * trailing break. Below it, an empty block or a leading break. A blank line
+ * that does not touch the table stays.
+ */
+export function dropBlankLineBeforeTables(root: ParentNode): void {
+	const tables = [...root.querySelectorAll("table")].filter((table) => !table.parentElement?.closest("table"));
+	for (const table of tables) {
+		const block = table.closest(".el-table") ?? table;
+		const prev = block.previousElementSibling;
+		if (prev) {
+			if (isBlankBlock(prev)) {
+				prev.remove();
+			} else {
+				const paragraph = paragraphOf(prev);
+				if (blankText(paragraph.textContent).length > 0) stripTrailingBreak(paragraph);
+			}
+		}
+		const next = block.nextElementSibling;
+		if (!next) continue;
+		if (isBlankBlock(next)) {
+			next.remove();
+			continue;
+		}
+		const following = paragraphOf(next);
+		if (blankText(following.textContent).length === 0) continue;
+		stripLeadingBreak(following);
+	}
+}
+
 /**
  * Render a note into `body > .print.theme-light > .markdown-preview-view`,
  * the structure Obsidian's print stylesheet and print-to-pdf expect.
@@ -995,6 +1062,7 @@ export async function renderNoteForExport(opts: RenderNoteOptions): Promise<Rend
 	appendProperties(viewEl, frontmatter, Boolean(opts.showProperties));
 
 	await MarkdownRenderer.render(app, markdown, viewEl, file.path, component);
+	dropBlankLineBeforeTables(viewEl);
 
 	viewEl.querySelectorAll("a.internal-link").forEach((node) => {
 		const el = node as HTMLAnchorElement;
