@@ -1,5 +1,5 @@
 import { bandHeightMm } from "./header-footer-layout";
-import type { PaginaSettings } from "./types";
+import { slotFontPt, type PaginaSettings } from "./types";
 import { effectiveLandscape, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 
 /** CSS reference pixel density used by html2canvas layout. */
@@ -23,7 +23,7 @@ export interface PageLayout {
 	marginRightMm: number;
 	/** Usable content width (between side margins), mm */
 	contentWidthMm: number;
-	/** Usable content height (between top/bottom margins, minus header/footer bands), mm */
+	/** Usable note height. Print margins already include the header and footer bands. */
 	contentHeightMm: number;
 	headerBandMm: number;
 	footerBandMm: number;
@@ -49,15 +49,15 @@ export function computePageLayout(
 	const footerLines = Math.max(1, bands?.footerLines ?? 1);
 	const margins = resolvePrintMarginsMm({
 		...settings,
-		header: { borderStyle: settings.header.borderStyle, lines: headerLines, fontSizePt: settings.header.fontSizePt },
-		footer: { borderStyle: settings.footer.borderStyle, lines: footerLines, fontSizePt: settings.footer.fontSizePt },
+		header: { borderStyle: settings.header.borderStyle, lines: headerLines, fontSizePx: settings.header.fontSizePx },
+		footer: { borderStyle: settings.footer.borderStyle, lines: footerLines, fontSizePx: settings.footer.fontSizePx },
 	});
 
 	const headerBandMm = settings.displayHeader
-		? bandHeightMm(settings.header.borderStyle, headerLines, settings.header.fontSizePt)
+		? bandHeightMm(settings.header.borderStyle, headerLines, slotFontPt(settings.header.fontSizePx))
 		: 0;
 	const footerBandMm = settings.displayFooter
-		? bandHeightMm(settings.footer.borderStyle, footerLines, settings.footer.fontSizePt)
+		? bandHeightMm(settings.footer.borderStyle, footerLines, slotFontPt(settings.footer.fontSizePx))
 		: 0;
 
 	const contentWidthMm = Math.max(1, page.width - margins.left - margins.right);

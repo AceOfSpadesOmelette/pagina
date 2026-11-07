@@ -30,14 +30,14 @@ export const LINE_MM = lineMm();
 /** Space between the text and its border. */
 export const TEXT_BORDER_GAP_MM = 0.8;
 
-/** Header baseline, measured from the top of the page. */
-export function headerBaselineFromTopMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
-	return FRAME_INSET_MM + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.8;
+/** Header baseline, measured from the top of the page. `marginTopMm` is the empty frame. */
+export function headerBaselineFromTopMm(fontSizePt = SLOT_FONT_DEFAULT_PT, marginTopMm = 0): number {
+	return marginTopMm + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.8;
 }
 
-/** Footer baseline, measured from the bottom of the page. */
-export function footerBaselineFromBottomMm(fontSizePt = SLOT_FONT_DEFAULT_PT): number {
-	return FRAME_INSET_MM + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.2;
+/** Footer baseline, measured from the bottom of the page. `marginBottomMm` is the empty frame. */
+export function footerBaselineFromBottomMm(fontSizePt = SLOT_FONT_DEFAULT_PT, marginBottomMm = 0): number {
+	return marginBottomMm + descenderMm(fontSizePt) / 2 + emMm(fontSizePt) * 0.2;
 }
 /** Space between the border and the note body. */
 export const CLEARANCE_MM = 1.0;
@@ -49,22 +49,6 @@ export function bandHeightMm(borderStyle: string | undefined, lines = 1, fontSiz
 
 export function requiredMarginMm(borderStyle: string | undefined, lines = 1, fontSizePt = SLOT_FONT_DEFAULT_PT): number {
 	return FRAME_INSET_MM + bandHeightMm(borderStyle, lines, fontSizePt) + CLEARANCE_MM;
-}
-
-/**
- * Grow the top and bottom margins so the header and footer bands, including
- * Chromium's frame inset, stay outside the note body. The user's margin is the minimum.
- * A larger footer deepens only the bottom margin.
- */
-export function effectiveVerticalMargins(
-	user: { top: number; bottom: number },
-	header: { display: boolean; borderStyle?: string; lines?: number; fontSizePt?: number },
-	footer: { display: boolean; borderStyle?: string; lines?: number; fontSizePt?: number },
-): { top: number; bottom: number } {
-	return {
-		top: header.display ? Math.max(user.top, requiredMarginMm(header.borderStyle, header.lines, header.fontSizePt)) : user.top,
-		bottom: footer.display ? Math.max(user.bottom, requiredMarginMm(footer.borderStyle, footer.lines, footer.fontSizePt)) : user.bottom,
-	};
 }
 
 export function mmToCssPx(mm: number): number {

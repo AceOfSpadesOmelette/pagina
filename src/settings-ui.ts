@@ -8,7 +8,7 @@ import {
 	downloadSettingsJson,
 	parseSettingsJson,
 } from "./settings-io";
-import { cheatSheetColumnBounds, clampCheatSheetColumns, clampSlotFontSize, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, SLOT_FONT_DEFAULT_PT, SLOT_FONT_MAX_PT, SLOT_FONT_MIN_PT, SLOT_FONT_STEP_PT } from "./types";
+import { cheatSheetColumnBounds, clampCheatSheetColumns, clampTextPx, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, TEXT_PX_MAX, TEXT_PX_MIN, TEXT_SIZE_DESC } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
 export interface NoteTitleField {
@@ -87,19 +87,6 @@ export function renderPaginaSettings(
 			});
 
 		new Setting(container)
-			.setName("Text size")
-			.setDesc("Points, from 6 to 14. Downscale percent still scales the whole page, including this text.")
-			.addSlider((s) =>
-				s
-					.setLimits(6, 14, 1)
-					.setValue(settings.cheatSheetFontSizePt)
-					.onChange((v) => {
-						settings.cheatSheetFontSizePt = v;
-						notify();
-					}),
-			);
-
-		new Setting(container)
 			.setName("Uniform text size")
 			.setDesc("Use one size for headings and body text. Headings stay bold. Continuous density always uses one size.")
 			.addToggle((t) =>
@@ -111,6 +98,22 @@ export function renderPaginaSettings(
 	}
 
 	new Setting(container).setName("Document").setHeading();
+
+	new Setting(container)
+		.setName("Body text size")
+		.setDesc(`${TEXT_SIZE_DESC} A normal export keeps the note's size until you change this.`)
+		.addText((text) => {
+			text.inputEl.type = "number";
+			text.inputEl.min = String(TEXT_PX_MIN);
+			text.inputEl.max = String(TEXT_PX_MAX);
+			text.inputEl.step = "1";
+			text.setValue(String(settings.bodyFontSizePx)).onChange((value) => {
+				if (value.trim() === "" || !Number.isFinite(Number(value))) return;
+				settings.bodyFontSizePx = clampTextPx(value, settings.bodyFontSizePx);
+				settings.applyBodyFontSize = true;
+				notify();
+			});
+		});
 
 	new Setting(container)
 		.setName("Include note title")
@@ -610,16 +613,18 @@ function addSlotSettings(
 
 	new Setting(container)
 		.setName(`${label} text size`)
-		.setDesc("Points, from 6 to 18. The default, 6.75, is the current 9px size.")
-		.addSlider((slider) =>
-			slider
-				.setLimits(SLOT_FONT_MIN_PT, SLOT_FONT_MAX_PT, SLOT_FONT_STEP_PT)
-				.setValue(slots.fontSizePt ?? SLOT_FONT_DEFAULT_PT)
-				.onChange((value) => {
-					slots.fontSizePt = clampSlotFontSize(value);
-					notify();
-				}),
-		);
+		.setDesc(TEXT_SIZE_DESC)
+		.addText((text) => {
+			text.inputEl.type = "number";
+			text.inputEl.min = String(TEXT_PX_MIN);
+			text.inputEl.max = String(TEXT_PX_MAX);
+			text.inputEl.step = "1";
+			text.setValue(String(slots.fontSizePx)).onChange((value) => {
+				if (value.trim() === "" || !Number.isFinite(Number(value))) return;
+				slots.fontSizePx = clampTextPx(value, slots.fontSizePx);
+				notify();
+			});
+		});
 
 	new Setting(container).setName(`${label} date/time format`).addDropdown((dd) => {
 		for (const format of DATETIME_FORMATS) {

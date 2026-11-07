@@ -9,8 +9,8 @@ export interface HeaderFooterSlots {
 	textColor?: string;
 	/** CSS font-family name. Blank uses the font of the open note. */
 	fontFamily?: string;
-	/** Running text size in points. The default, 6.75, is the current 9px. */
-	fontSizePt?: number;
+	/** Running text size in pixels. The default, 9, is the old 6.75pt size. */
+	fontSizePx: number;
 	/** Applied to a plain {{datetime}}. An explicit {{datetime:FORMAT}} still wins. */
 	datetimeFormat?: DatetimeFormat;
 }
@@ -39,15 +39,18 @@ export type MaxHeadingLevel = "1" | "2" | "3" | "4" | "5" | "6";
 /** Compact keeps each line. Continuous joins text into one run. */
 export type CheatSheetDensity = "compact" | "continuous";
 
-/** Header and footer text. 6.75pt is 9px at 96dpi, the size used before this setting. */
-export const SLOT_FONT_MIN_PT = 6;
-export const SLOT_FONT_MAX_PT = 18;
-export const SLOT_FONT_DEFAULT_PT = 6.75;
-export const SLOT_FONT_STEP_PT = 0.25;
-
-export const CHEAT_SHEET_FONT_MIN_PT = 6;
-export const CHEAT_SHEET_FONT_MAX_PT = 14;
-export const CHEAT_SHEET_FONT_DEFAULT_PT = 8;
+/** Body, header, and footer text. 2–512 can be typed; 8–96 is the suggested reading range. */
+export const TEXT_PX_MIN = 2;
+export const TEXT_PX_MAX = 512;
+export const TEXT_PX_SUGGESTED_MIN = 8;
+export const TEXT_PX_SUGGESTED_MAX = 96;
+export const TEXT_SIZE_DESC = "Pixels, from 2 to 512. Suggested range is 8 to 96 for reading.";
+/** Header and footer. 9px is 6.75pt, the size used before this setting. */
+export const SLOT_FONT_DEFAULT_PX = 9;
+/** Cheat sheet body. 11px is the old 8pt default, rounded. */
+export const BODY_FONT_DEFAULT_PX = 11;
+/** Point size of the default header and footer, for PDF drawing. */
+export const SLOT_FONT_DEFAULT_PT = (SLOT_FONT_DEFAULT_PX * 72) / 96;
 export const CHEAT_SHEET_COLUMNS_DEFAULT = 3;
 
 /** Two, three, or four columns in either orientation. */
@@ -91,8 +94,10 @@ export interface PaginaSettings {
 	cheatSheetDensity: CheatSheetDensity;
 	/** 2, 3, or 4 columns in either orientation. */
 	cheatSheetColumns: number;
-	/** Body text size in points while the cheat sheet is on. */
-	cheatSheetFontSizePt: number;
+	/** Note text size in pixels. Used by the cheat sheet, and by a normal export after it is changed. */
+	bodyFontSizePx: number;
+	/** False until the body size is edited, so a normal export keeps the note's own font. */
+	applyBodyFontSize: boolean;
 	/** Headings use the body size. They stay bold. */
 	cheatSheetUniformText: boolean;
 	displayHeader: boolean;
@@ -135,7 +140,8 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 	cheatSheet: false,
 	cheatSheetDensity: "compact",
 	cheatSheetColumns: CHEAT_SHEET_COLUMNS_DEFAULT,
-	cheatSheetFontSizePt: CHEAT_SHEET_FONT_DEFAULT_PT,
+	bodyFontSizePx: BODY_FONT_DEFAULT_PX,
+	applyBodyFontSize: false,
 	cheatSheetUniformText: true,
 	displayHeader: false,
 	header: {
@@ -146,7 +152,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 		borderColor: "#000000",
 		textColor: "#555555",
 		fontFamily: "",
-		fontSizePt: SLOT_FONT_DEFAULT_PT,
+		fontSizePx: SLOT_FONT_DEFAULT_PX,
 		datetimeFormat: "locale",
 	},
 	displayFooter: true,
@@ -158,7 +164,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 		borderColor: "#000000",
 		textColor: "#555555",
 		fontFamily: "",
-		fontSizePt: SLOT_FONT_DEFAULT_PT,
+		fontSizePx: SLOT_FONT_DEFAULT_PX,
 		datetimeFormat: "locale",
 	},
 	sectionHeadingLevel: "1",
@@ -174,7 +180,8 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 };
 
 export function normalizeSettings(raw: unknown): PaginaSettings {
-	const data = (raw ?? {}) as Partial<PaginaSettings>;
+	const data = (raw ?? {}) as Partial<PaginaSettings> & { cheatSheetFontSizePt?: unknown };
+	const { cheatSheetFontSizePt: legacyCheatPt, ...rest } = data;
 	const level = String(data.maxHeadingLevel ?? DEFAULT_SETTINGS.maxHeadingLevel);
 	const maxHeadingLevel = (["1", "2", "3", "4", "5", "6"].includes(level)
 		? level
@@ -182,7 +189,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 
 	return {
 		...DEFAULT_SETTINGS,
-		...data,
+		...rest,
 		header: normalizeSlots(DEFAULT_SETTINGS.header, data.header),
 		footer: normalizeSlots(DEFAULT_SETTINGS.footer, data.footer),
 		downscalePercent: clamp(
@@ -204,7 +211,8 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		cheatSheet: data.cheatSheet === true,
 		cheatSheetDensity: data.cheatSheetDensity === "continuous" ? "continuous" : "compact",
 		cheatSheetColumns: clampCheatSheetColumns(data.cheatSheetColumns),
-		cheatSheetFontSizePt: clampCheatSheetFontSize(data.cheatSheetFontSizePt),
+		bodyFontSizePx: migratedTextPx(data.bodyFontSizePx, legacyCheatPt, BODY_FONT_DEFAULT_PX),
+		applyBodyFontSize: data.applyBodyFontSize === true,
 		cheatSheetUniformText: data.cheatSheetUniformText ?? DEFAULT_SETTINGS.cheatSheetUniformText,
 		sectionHeadingLevel: (["1", "2", "3", "4", "5", "6"].includes(String(data.sectionHeadingLevel))
 			? String(data.sectionHeadingLevel)
@@ -219,11 +227,16 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 	};
 }
 
-function normalizeSlots(defaults: HeaderFooterSlots, raw?: Partial<HeaderFooterSlots>): HeaderFooterSlots {
-	const slots = { ...defaults, ...(raw ?? {}) };
+function normalizeSlots(
+	defaults: HeaderFooterSlots,
+	raw?: Partial<HeaderFooterSlots> & { fontSizePt?: unknown },
+): HeaderFooterSlots {
+	const source = raw ?? {};
+	const { fontSizePt, fontSizePx, ...rest } = source;
+	const slots: HeaderFooterSlots = { ...defaults, ...rest };
 	slots.borderStyle = normalizeBorderStyle(slots.borderStyle);
 	slots.datetimeFormat = normalizeDatetimeFormat(slots.datetimeFormat);
-	slots.fontSizePt = clampSlotFontSize(raw?.fontSizePt ?? defaults.fontSizePt);
+	slots.fontSizePx = migratedTextPx(fontSizePx, fontSizePt, defaults.fontSizePx);
 	return slots;
 }
 
@@ -236,22 +249,36 @@ function clamp(n: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, n));
 }
 
-export function clampSlotFontSize(value: unknown): number {
+export function pxToPt(px: number): number {
+	return (px * 72) / 96;
+}
+
+export function ptToPx(pt: number): number {
+	return Math.round((pt * 96) / 72);
+}
+
+/** Whole pixels from 2 to 512. A missing or invalid value uses the fallback. */
+export function clampTextPx(value: unknown, fallback: number): number {
 	const parsed =
 		typeof value === "number"
 			? value
 			: typeof value === "string" && value.trim() !== ""
 				? Number(value)
 				: Number.NaN;
-	const base = Number.isFinite(parsed) ? parsed : SLOT_FONT_DEFAULT_PT;
-	const clamped = clamp(base, SLOT_FONT_MIN_PT, SLOT_FONT_MAX_PT);
-	const steps = Math.round((clamped - SLOT_FONT_MIN_PT) / SLOT_FONT_STEP_PT);
-	return Math.round((SLOT_FONT_MIN_PT + steps * SLOT_FONT_STEP_PT) * 100) / 100;
+	const base = Number.isFinite(parsed) ? Math.round(parsed) : fallback;
+	return clamp(base, TEXT_PX_MIN, TEXT_PX_MAX);
 }
 
-export function clampCheatSheetFontSize(value: unknown): number {
-	const n = typeof value === "number" && Number.isFinite(value) ? value : CHEAT_SHEET_FONT_DEFAULT_PT;
-	return clamp(n, CHEAT_SHEET_FONT_MIN_PT, CHEAT_SHEET_FONT_MAX_PT);
+/** A saved pixel size wins. Otherwise a saved point size converts at 96/72. */
+export function migratedTextPx(px: unknown, legacyPt: unknown, fallback: number): number {
+	if (px != null && px !== "") return clampTextPx(px, fallback);
+	if (legacyPt != null && legacyPt !== "") return clampTextPx(ptToPx(Number(legacyPt)), fallback);
+	return fallback;
+}
+
+/** PDF point size for a stored pixel size. */
+export function slotFontPt(px: unknown): number {
+	return pxToPt(clampTextPx(px, SLOT_FONT_DEFAULT_PX));
 }
 
 export function clampCheatSheetColumns(value: unknown): number {

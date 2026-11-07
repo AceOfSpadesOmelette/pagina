@@ -13,16 +13,15 @@ import { applyImportedSettings, downloadSettingsJson, parseSettingsJson } from "
 import {
 	cheatSheetColumnChoices,
 	clampCheatSheetColumns,
-	clampCheatSheetFontSize,
-	clampSlotFontSize,
+	clampTextPx,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
 	type HeaderFooterSlots,
 	type MaxHeadingLevel,
 	type PaginaSettings,
-	SLOT_FONT_MAX_PT,
-	SLOT_FONT_MIN_PT,
-	SLOT_FONT_STEP_PT,
+	TEXT_PX_MAX,
+	TEXT_PX_MIN,
+	TEXT_SIZE_DESC,
 	type TimestampFormat,
 } from "./types";
 import { VARIABLE_HINT } from "./variables";
@@ -60,7 +59,7 @@ function isHexColor(value: string): boolean {
 type SlotField = keyof HeaderFooterSlots;
 
 function slotKey(key: string): { which: "header" | "footer"; field: SlotField } | null {
-	const match = /^(header|footer)\.(left|center|right|borderStyle|borderColor|textColor|fontFamily|fontSizePt|datetimeFormat)$/.exec(key);
+	const match = /^(header|footer)\.(left|center|right|borderStyle|borderColor|textColor|fontFamily|fontSizePx|datetimeFormat)$/.exec(key);
 	if (!match) return null;
 	return { which: match[1] as "header" | "footer", field: match[2] as SlotField };
 }
@@ -111,8 +110,9 @@ export class PaginaSettingTab extends PluginSettingTab {
 			await this.plugin.saveSettings();
 			return;
 		}
-		if (key === "cheatSheetFontSizePt") {
-			settings.cheatSheetFontSizePt = clampCheatSheetFontSize(value);
+		if (key === "bodyFontSizePx") {
+			settings.bodyFontSizePx = clampTextPx(value, settings.bodyFontSizePx);
+			settings.applyBodyFontSize = true;
 			await this.plugin.saveSettings();
 			return;
 		}
@@ -171,12 +171,6 @@ export class PaginaSettingTab extends PluginSettingTab {
 						},
 					},
 					{
-						name: "Text size",
-						desc: "Points, from 6 to 14. Downscale percent still scales the whole page, including this text.",
-						visible: () => this.plugin.settings.cheatSheet,
-						control: { type: "slider", key: "cheatSheetFontSizePt", min: 6, max: 14, step: 1 },
-					},
-					{
 						name: "Uniform text size",
 						desc: "Use one size for headings and body text. Headings stay bold. Continuous density always uses one size.",
 						visible: () => this.plugin.settings.cheatSheet,
@@ -188,6 +182,17 @@ export class PaginaSettingTab extends PluginSettingTab {
 				type: "group",
 				heading: "Document",
 				items: [
+					{
+						name: "Body text size",
+						desc: `${TEXT_SIZE_DESC} A normal export keeps the note's size until you change this.`,
+						control: {
+							type: "number",
+							key: "bodyFontSizePx",
+							min: TEXT_PX_MIN,
+							max: TEXT_PX_MAX,
+							step: 1,
+						},
+					},
 					{
 						name: "Include note title",
 						desc: "Show the note title at the top of the export.",
@@ -458,14 +463,14 @@ export class PaginaSettingTab extends PluginSettingTab {
 			},
 			{
 				name: `${label} text size`,
-				desc: "Points, from 6 to 18. The default, 6.75, is the current 9px size.",
+				desc: TEXT_SIZE_DESC,
 				visible,
 				control: {
-					type: "slider",
-					key: `${which}.fontSizePt`,
-					min: SLOT_FONT_MIN_PT,
-					max: SLOT_FONT_MAX_PT,
-					step: SLOT_FONT_STEP_PT,
+					type: "number",
+					key: `${which}.fontSizePx`,
+					min: TEXT_PX_MIN,
+					max: TEXT_PX_MAX,
+					step: 1,
 				},
 			},
 			{
@@ -493,8 +498,8 @@ export class PaginaSettingTab extends PluginSettingTab {
 			slots[field] = value || fallback;
 			return true;
 		}
-		if (field === "fontSizePt") {
-			slots.fontSizePt = clampSlotFontSize(value);
+		if (field === "fontSizePx") {
+			slots.fontSizePx = clampTextPx(value, slots.fontSizePx);
 			return true;
 		}
 		if (typeof value !== "string") return false;

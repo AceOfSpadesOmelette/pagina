@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { effectiveVerticalMargins, LINE_MM, requiredMarginMm } from "../src/header-footer-layout";
+import { bandHeightMm, LINE_MM, requiredMarginMm } from "../src/header-footer-layout";
+import { resolveFrameMarginsMm, resolvePrintMarginsMm } from "../src/page-presets";
+import { DEFAULT_SETTINGS, slotFontPt } from "../src/types";
 import {
 	allocateSlotSpans,
 	slotColumnWidth,
@@ -98,30 +100,34 @@ describe("header and footer slots", () => {
 		expect(lines.join("")).not.toContain("…");
 	});
 
-	it("grows the margin by one line for each extra header line", () => {
+	it("keeps the entered margin empty and reserves the header and footer inside it", () => {
 		expect(requiredMarginMm("none", 2) - requiredMarginMm("none", 1)).toBeCloseTo(LINE_MM);
-		const margins = effectiveVerticalMargins(
-			{ top: 9, bottom: 9 },
-			{ display: true, borderStyle: "none", lines: 2 },
-			{ display: true, borderStyle: "none", lines: 1 },
-		);
-		expect(margins.top).toBeCloseTo(requiredMarginMm("none", 2));
-		expect(margins.bottom).toBeCloseTo(requiredMarginMm("none", 1));
-	});
-
-	it("grows only the footer margin when the footer text is larger", () => {
-		const base = effectiveVerticalMargins(
-			{ top: 9, bottom: 9 },
-			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
-			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
-		);
-		const largerFooter = effectiveVerticalMargins(
-			{ top: 9, bottom: 9 },
-			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 6.75 },
-			{ display: true, borderStyle: "none", lines: 1, fontSizePt: 14 },
-		);
-		expect(largerFooter.top).toBeCloseTo(base.top);
-		expect(largerFooter.bottom).toBeGreaterThan(base.bottom);
 		expect(requiredMarginMm("none", 1)).toBeCloseTo(requiredMarginMm("none", 1, 6.75));
+		const tight = {
+			...DEFAULT_SETTINGS,
+			marginPreset: "Custom",
+			customMarginTopMm: 4,
+			customMarginBottomMm: 4,
+			customMarginLeftMm: 4,
+			customMarginRightMm: 4,
+			displayHeader: true,
+			displayFooter: true,
+		};
+		expect(resolveFrameMarginsMm(tight)).toEqual({ top: 4, bottom: 4, left: 4, right: 4 });
+		const headerBand = bandHeightMm(tight.header.borderStyle, 1, slotFontPt(tight.header.fontSizePx));
+		const footerBand = bandHeightMm(tight.footer.borderStyle, 1, slotFontPt(tight.footer.fontSizePx));
+		expect(resolvePrintMarginsMm(tight)).toEqual({
+			top: 4 + headerBand,
+			bottom: 4 + footerBand,
+			left: 4,
+			right: 4,
+		});
+		expect(resolvePrintMarginsMm({ ...tight, displayHeader: false, displayFooter: false })).toEqual({
+			top: 4,
+			bottom: 4,
+			left: 4,
+			right: 4,
+		});
+		expect(requiredMarginMm("none", 1, 14)).toBeGreaterThan(requiredMarginMm("none", 1, 6.75));
 	});
 });

@@ -2,9 +2,9 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import electron from "electron";
-import { borderSvg } from "./header-borders";
+import { borderExtentMm, borderSvg } from "./header-borders";
 import { emMm, lineMm, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
-import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
+import { slotFontPt, type PaginaSettings, type TimestampFormat } from "./types";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { slotSpansForTexts } from "./slot-wrap";
 import { restampOrderedLists } from "./ordered-lists";
@@ -209,7 +209,7 @@ function headerFooterHtml(
 		borderColor?: string;
 		textColor?: string;
 		fontFamily?: string;
-		fontSizePt?: number;
+		fontSizePx?: number;
 		datetimeFormat?: string;
 	},
 	ctx: VariableContext,
@@ -228,15 +228,20 @@ function headerFooterHtml(
 	const textColor = slots.textColor || "#555555";
 	const fontFamily = cssFontFamily(slots.fontFamily, noteFont);
 	const rule = omitRule ? "" : borderSvg(slots.borderStyle, slots.borderColor);
-	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const fontPt = slotFontPt(slots.fontSizePx);
 	const linePx = mmToCssPx(lineMm(fontPt));
 	const rowPx = mmToCssPx(lineMm(fontPt) * Math.max(1, lines));
 	const emPx = mmToCssPx(emMm(fontPt));
 	const gapPx = mmToCssPx(TEXT_BORDER_GAP_MM);
-	const justify = edge === "header" ? "flex-start" : "flex-end";
+	const borderPx = mmToCssPx(borderExtentMm(slots.borderStyle));
+	// Pack the band against the note, leaving the entered margin empty at the page edge.
+	const justify = edge === "header" ? "flex-end" : "flex-start";
 	const alignItems = edge === "header" ? "flex-start" : "flex-end";
-	const ruleHtml = rule ? `<div style="width:100%;line-height:0;">${rule}</div>` : "";
-	const gapHtml = rule ? `<div style="height:${gapPx}px;line-height:0;font-size:0;"></div>` : "";
+	const ruleHtml =
+		borderPx > 0
+			? `<div style="width:100%;height:${borderPx}px;line-height:0;font-size:0;">${omitRule ? "" : rule}</div>`
+			: "";
+	const gapHtml = `<div style="height:${gapPx}px;line-height:0;font-size:0;"></div>`;
 	const measureCtx: VariableContext = {
 		...ctx,
 		page: 999,
@@ -291,12 +296,12 @@ export function makeElectronPrintOptions(
 		header: {
 			borderStyle: settings.header.borderStyle,
 			lines: extras?.headerLines,
-			fontSizePt: settings.header.fontSizePt,
+			fontSizePx: settings.header.fontSizePx,
 		},
 		footer: {
 			borderStyle: settings.footer.borderStyle,
 			lines: extras?.footerLines,
-			fontSizePt: settings.footer.fontSizePt,
+			fontSizePx: settings.footer.fontSizePx,
 		},
 	};
 	const margins = resolvePrintMarginsMm(banded);

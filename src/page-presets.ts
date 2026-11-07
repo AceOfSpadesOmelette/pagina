@@ -1,4 +1,5 @@
-import { effectiveVerticalMargins } from "./header-footer-layout";
+import { bandHeightMm } from "./header-footer-layout";
+import { slotFontPt } from "./types";
 
 /** Page size presets in millimetres [width, height]. */
 export const PAGE_SIZE_PRESETS: Record<string, [number, number]> = {
@@ -127,13 +128,28 @@ export interface LayoutInput {
 	customMarginRightMm: number;
 	displayHeader?: boolean;
 	displayFooter?: boolean;
-	header?: { borderStyle?: string; lines?: number; fontSizePt?: number };
-	footer?: { borderStyle?: string; lines?: number; fontSizePt?: number };
+	header?: { borderStyle?: string; lines?: number; fontSizePx?: number };
+	footer?: { borderStyle?: string; lines?: number; fontSizePx?: number };
+}
+
+/** The empty paper the user entered. Header, footer, and body sit inside it. */
+export function resolveFrameMarginsMm(input: LayoutInput): {
+	top: number;
+	bottom: number;
+	left: number;
+	right: number;
+} {
+	return resolveMarginsMm(input.marginPreset, {
+		top: input.customMarginTopMm,
+		bottom: input.customMarginBottomMm,
+		left: input.customMarginLeftMm,
+		right: input.customMarginRightMm,
+	});
 }
 
 /**
- * User margins plus the vertical space of the header and footer rules.
- * Chromium draws those rules inside the top and bottom margin boxes.
+ * Page inset for the note body. The entered margin stays empty, and the
+ * header and footer bands are reserved inside it.
  */
 export function resolvePrintMarginsMm(input: LayoutInput): {
 	top: number;
@@ -141,32 +157,18 @@ export function resolvePrintMarginsMm(input: LayoutInput): {
 	left: number;
 	right: number;
 } {
-	const margins = resolveMarginsMm(input.marginPreset, {
-		top: input.customMarginTopMm,
-		bottom: input.customMarginBottomMm,
-		left: input.customMarginLeftMm,
-		right: input.customMarginRightMm,
-	});
-	const vertical = effectiveVerticalMargins(
-		margins,
-		{
-			display: Boolean(input.displayHeader),
-			borderStyle: input.header?.borderStyle,
-			lines: input.header?.lines,
-			fontSizePt: input.header?.fontSizePt,
-		},
-		{
-			display: Boolean(input.displayFooter),
-			borderStyle: input.footer?.borderStyle,
-			lines: input.footer?.lines,
-			fontSizePt: input.footer?.fontSizePt,
-		},
-	);
+	const frame = resolveFrameMarginsMm(input);
+	const headerBand = input.displayHeader
+		? bandHeightMm(input.header?.borderStyle, input.header?.lines ?? 1, slotFontPt(input.header?.fontSizePx))
+		: 0;
+	const footerBand = input.displayFooter
+		? bandHeightMm(input.footer?.borderStyle, input.footer?.lines ?? 1, slotFontPt(input.footer?.fontSizePx))
+		: 0;
 	return {
-		top: vertical.top,
-		bottom: vertical.bottom,
-		left: margins.left,
-		right: margins.right,
+		top: frame.top + headerBand,
+		bottom: frame.bottom + footerBand,
+		left: frame.left,
+		right: frame.right,
 	};
 }
 
@@ -177,8 +179,8 @@ function withBandLines(
 	if (!bands) return input;
 	return {
 		...input,
-		header: { borderStyle: input.header?.borderStyle, lines: bands.headerLines, fontSizePt: input.header?.fontSizePt },
-		footer: { borderStyle: input.footer?.borderStyle, lines: bands.footerLines, fontSizePt: input.footer?.fontSizePt },
+		header: { borderStyle: input.header?.borderStyle, lines: bands.headerLines, fontSizePx: input.header?.fontSizePx },
+		footer: { borderStyle: input.footer?.borderStyle, lines: bands.footerLines, fontSizePx: input.footer?.fontSizePx },
 	};
 }
 

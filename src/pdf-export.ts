@@ -3,16 +3,15 @@ import html2canvas from "html2canvas";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 
 export { isPhoneSession } from "./session";
-import { clampSlotFontSize, type PaginaSettings, type TimestampFormat } from "./types";
+import { slotFontPt, type PaginaSettings, type TimestampFormat } from "./types";
 import { borderExtentMm, drawBorderBand } from "./header-borders";
 import {
 	footerBaselineFromBottomMm,
-	FRAME_INSET_MM,
 	headerBaselineFromTopMm,
 	lineMm,
 	TEXT_BORDER_GAP_MM,
 } from "./header-footer-layout";
-import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
+import { effectiveLandscape, layoutWarning, resolveFrameMarginsMm, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { fitStampedImages } from "./image-fit";
 import { computePageLayout, type PageLayout } from "./paginate";
 import {
@@ -184,7 +183,7 @@ async function buildPdfBytesElectron(
 			headingSources,
 			level,
 			columnPt,
-			clampSlotFontSize(settings.header.fontSizePt),
+			slotFontPt(settings.header.fontSizePx),
 		);
 		const footerLines = await runningEdgeLines(
 			settings.displayFooter,
@@ -194,7 +193,7 @@ async function buildPdfBytesElectron(
 			headingSources,
 			level,
 			columnPt,
-			clampSlotFontSize(settings.footer.fontSizePt),
+			slotFontPt(settings.footer.fontSizePx),
 		);
 		const bands = { headerLines, footerLines };
 		const bandWarning = layoutWarning(settings, bands);
@@ -375,7 +374,7 @@ export async function buildPdfBytesRaster(
 				headingSources,
 				level,
 				columnPt,
-				clampSlotFontSize(settings.header.fontSizePt),
+				slotFontPt(settings.header.fontSizePx),
 			),
 			footerLines: await runningEdgeLines(
 				settings.displayFooter,
@@ -385,7 +384,7 @@ export async function buildPdfBytesRaster(
 				headingSources,
 				level,
 				columnPt,
-				clampSlotFontSize(settings.footer.fontSizePt),
+				slotFontPt(settings.footer.fontSizePx),
 			),
 		};
 		const bandWarning = layoutWarning(settings, bands);
@@ -650,6 +649,7 @@ export async function exportNoteViaWebPrint(
 			effectiveLandscape(settings),
 		);
 		const margins = resolvePrintMarginsMm(settings);
+		const frame = resolveFrameMarginsMm(settings);
 		const frontmatter = rendered.frontmatter ?? app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 		const ctx: VariableContext = {
 			title: resolveNoteTitle(frontmatter, file.basename, noteTitle),
@@ -659,7 +659,7 @@ export async function exportNoteViaWebPrint(
 			frontmatter,
 			now: new Date(),
 		};
-		const css = printFrameCss(page, margins, settings);
+		const css = printFrameCss(page, margins, frame, settings);
 		const contentWidthMm = Math.max(0, page.width - margins.left - margins.right);
 		await mountPrintFrame(doc, file.basename, css, settings, ctx, contentWidthMm);
 
@@ -720,6 +720,7 @@ export async function exportNoteWithoutElectron(
 function printFrameCss(
 	page: { width: number; height: number },
 	margins: { top: number; bottom: number; left: number; right: number },
+	frame: { top: number; bottom: number; left: number; right: number },
 	settings: PaginaSettings,
 ): string {
 	const colorAdjust = settings.printBackground
@@ -729,11 +730,12 @@ function printFrameCss(
 @page { size: ${page.width}mm ${page.height}mm; margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm; }
 html, body { margin: 0; padding: 0; background: #fff; color: #222; ${colorAdjust} }
 .pagina-run-header, .pagina-run-footer {
-  position: fixed; left: 0; right: 0; display: flex; gap: 0;
-  font-size: 9pt; line-height: 1.2; box-sizing: border-box;
+  position: fixed; display: flex; gap: 0;
+  left: ${frame.left}mm; right: ${frame.right}mm;
+  font-size: 9px; line-height: 1.2; box-sizing: border-box;
 }
-.pagina-run-header { top: 2mm; }
-.pagina-run-footer { bottom: 2mm; }
+.pagina-run-header { top: ${frame.top}mm; }
+.pagina-run-footer { bottom: ${frame.bottom}mm; }
 .pagina-run-header > div, .pagina-run-footer > div { flex: 0 0 auto; min-width: 0; box-sizing: border-box; }
 .pagina-run-header .center, .pagina-run-footer .center { text-align: center; }
 .pagina-run-header .right, .pagina-run-footer .right { text-align: right; }
@@ -777,7 +779,7 @@ async function appendPrintBand(
 	if (!slots.left && !slots.center && !slots.right) return;
 	const band = createDiv({ cls: `pagina-run-${kind}` });
 	band.style.color = slots.textColor || "#555555";
-	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const fontPt = slotFontPt(slots.fontSizePx);
 	band.style.fontSize = `${fontPt}pt`;
 	const face = slots.fontFamily?.trim();
 	if (face) band.style.fontFamily = face;
@@ -920,10 +922,12 @@ function drawHeaderFooter(
 	const contentLeft = layout.marginLeftMm;
 	const contentWidth = layout.contentWidthMm;
 
+	const frameTop = layout.marginTopMm - layout.headerBandMm;
+	const frameBottom = layout.marginBottomMm - layout.footerBandMm;
 	if (settings.displayHeader) {
-		const headerPt = clampSlotFontSize(settings.header.fontSizePt);
+		const headerPt = slotFontPt(settings.header.fontSizePx);
 		const borderMm = borderExtentMm(settings.header.borderStyle);
-		const textY = headerBaselineFromTopMm(headerPt);
+		const textY = headerBaselineFromTopMm(headerPt, frameTop);
 		drawSlots(
 			page,
 			pageHeightPt,
@@ -943,15 +947,15 @@ function drawHeaderFooter(
 				settings.header.borderStyle,
 				settings.header.borderColor,
 				contentLeft,
-				FRAME_INSET_MM + lineMm(headerPt) * layout.headerLines + TEXT_BORDER_GAP_MM,
+				frameTop + lineMm(headerPt) * layout.headerLines + TEXT_BORDER_GAP_MM,
 				contentWidth,
 			);
 		}
 	}
 	if (settings.displayFooter) {
-		const footerPt = clampSlotFontSize(settings.footer.fontSizePt);
+		const footerPt = slotFontPt(settings.footer.fontSizePx);
 		const borderMm = borderExtentMm(settings.footer.borderStyle);
-		const textY = layout.pageHeightMm - footerBaselineFromBottomMm(footerPt);
+		const textY = layout.pageHeightMm - footerBaselineFromBottomMm(footerPt, frameBottom);
 		if (borderMm > 0) {
 			drawBorderBand(
 				page,
@@ -959,7 +963,7 @@ function drawHeaderFooter(
 				settings.footer.borderStyle,
 				settings.footer.borderColor,
 				contentLeft,
-				layout.pageHeightMm - FRAME_INSET_MM - lineMm(footerPt) * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
+				layout.pageHeightMm - frameBottom - lineMm(footerPt) * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
 				contentWidth,
 			);
 		}
@@ -983,7 +987,7 @@ function drawSlots(
 	pageHeightPt: number,
 	font: PDFFont,
 	ink: ReturnType<typeof rgb>,
-	slots: { left: string; center: string; right: string; datetimeFormat?: string; fontSizePt?: number },
+	slots: { left: string; center: string; right: string; datetimeFormat?: string; fontSizePx?: number },
 	contentLeftMm: number,
 	y: number,
 	contentWidthMm: number,
@@ -991,7 +995,7 @@ function drawSlots(
 	direction: "down" | "up",
 ): void {
 	const slotCtx = { ...ctx, datetimeFormat: slots.datetimeFormat };
-	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const fontPt = slotFontPt(slots.fontSizePx);
 	const widthOf = (sample: string): number | null => {
 		try {
 			return font.widthOfTextAtSize(sample, fontPt);

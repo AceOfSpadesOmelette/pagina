@@ -533,12 +533,22 @@ img.__canvas__ {
 	width: 100%;
 }
 
+/* Drop Obsidian's reading-view padding so the note starts at the page margin. */
+.print.pagina-print .markdown-preview-view,
+.print.pagina-print .markdown-preview-sizer {
+	margin: 0;
+	padding: 0;
+}
+.print.pagina-print.pagina-body-font .markdown-preview-view {
+	font-size: var(--pagina-body-font-size);
+}
+
 /* Exam cheat sheet. Keep in sync with CHEAT_SHEET_CSS in src/print-styles.ts. */
 .print.pagina-print.pagina-cheat-sheet .markdown-preview-view {
 	column-count: var(--pagina-cheat-columns, 3);
 	column-gap: 4mm;
 	column-fill: auto;
-	font-size: var(--pagina-cheat-font-size, 8pt);
+	font-size: var(--pagina-cheat-font-size, 11px);
 	line-height: 1.05;
 	overflow-wrap: break-word;
 	page-break-after: avoid;
@@ -627,10 +637,10 @@ img.__canvas__ {
 	text-align: center;
 	margin: 0 0 1mm;
 	line-height: 1.05;
-	font-size: var(--pagina-cheat-font-size, 8pt);
+	font-size: var(--pagina-cheat-font-size, 11px);
 }
 .print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h1.__title__ {
-	font-size: calc(var(--pagina-cheat-font-size, 8pt) * 1.35);
+	font-size: calc(var(--pagina-cheat-font-size, 11px) * 1.35);
 }
 .print.pagina-print.pagina-cheat-sheet .pagina-continuous-run {
 	margin: 0;

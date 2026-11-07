@@ -42,7 +42,7 @@ export const CHEAT_SHEET_CSS = `
   column-count: var(--pagina-cheat-columns, 3);
   column-gap: 4mm;
   column-fill: auto;
-  font-size: var(--pagina-cheat-font-size, 8pt);
+  font-size: var(--pagina-cheat-font-size, 11px);
   line-height: 1.05;
   overflow-wrap: break-word;
   page-break-after: avoid;
@@ -131,10 +131,10 @@ export const CHEAT_SHEET_CSS = `
   text-align: center;
   margin: 0 0 1mm;
   line-height: 1.05;
-  font-size: var(--pagina-cheat-font-size, 8pt);
+  font-size: var(--pagina-cheat-font-size, 11px);
 }
 .print.pagina-print.pagina-cheat-sheet:not(.pagina-uniform-text) .markdown-preview-view h1.__title__ {
-  font-size: calc(var(--pagina-cheat-font-size, 8pt) * 1.35);
+  font-size: calc(var(--pagina-cheat-font-size, 11px) * 1.35);
 }
 .print.pagina-print.pagina-cheat-sheet .pagina-continuous-run {
   margin: 0;
@@ -155,6 +155,15 @@ export const PRINT_CSS = `
 ${LIGHT_PRINT_SURFACE_CSS}
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+}
+/* Drop Obsidian's reading-view padding so the note starts at the page margin. */
+.print.pagina-print .markdown-preview-view,
+.print.pagina-print .markdown-preview-sizer {
+  margin: 0;
+  padding: 0;
+}
+.print.pagina-print.pagina-body-font .markdown-preview-view {
+  font-size: var(--pagina-body-font-size);
 }
 .print.pagina-print table {
   border-collapse: collapse;

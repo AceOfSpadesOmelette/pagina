@@ -857,7 +857,8 @@ export interface RenderNoteOptions {
 	cheatSheet?: boolean;
 	cheatSheetDensity?: PaginaSettings["cheatSheetDensity"];
 	cheatSheetColumns?: number;
-	cheatSheetFontSizePt?: number;
+	bodyFontSizePx?: number;
+	applyBodyFontSize?: boolean;
 	cheatSheetUniformText?: boolean;
 	landscape?: boolean;
 	/** html2canvas fallback: inline images and attach a sanitized stylesheet. */
@@ -885,7 +886,8 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 	| "cheatSheet"
 	| "cheatSheetDensity"
 	| "cheatSheetColumns"
-	| "cheatSheetFontSizePt"
+	| "bodyFontSizePx"
+	| "applyBodyFontSize"
 	| "cheatSheetUniformText"
 	| "landscape"
 	| "linkTocEntries"
@@ -901,7 +903,8 @@ export function renderFlagsFromSettings(settings: PaginaSettings): Pick<
 		cheatSheet: settings.cheatSheet,
 		cheatSheetDensity: settings.cheatSheetDensity,
 		cheatSheetColumns: settings.cheatSheetColumns,
-		cheatSheetFontSizePt: settings.cheatSheetFontSizePt,
+		bodyFontSizePx: settings.bodyFontSizePx,
+		applyBodyFontSize: settings.applyBodyFontSize,
 		cheatSheetUniformText: settings.cheatSheetUniformText,
 		landscape: settings.landscape,
 		linkTocEntries: settings.linkTocEntries,
@@ -921,7 +924,8 @@ export function applyH1StyleClasses(
 		| "cheatSheet"
 		| "cheatSheetDensity"
 		| "cheatSheetColumns"
-		| "cheatSheetFontSizePt"
+		| "bodyFontSizePx"
+		| "applyBodyFontSize"
 		| "cheatSheetUniformText"
 		| "landscape"
 	>,

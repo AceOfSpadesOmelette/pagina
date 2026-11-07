@@ -1,10 +1,10 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { borderExtentMm, drawBorderBand } from "./header-borders";
-import { footerBaselineFromBottomMm, FRAME_INSET_MM, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
-import { resolvePrintMarginsMm } from "./page-presets";
+import { bandHeightMm, footerBaselineFromBottomMm, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
+import { resolveFrameMarginsMm } from "./page-presets";
 import { slotSpansForTexts, wrapSlotText } from "./slot-wrap";
-import { clampSlotFontSize, type HeaderFooterSlots, type PaginaSettings } from "./types";
+import { slotFontPt, type HeaderFooterSlots, type PaginaSettings } from "./types";
 import { renderTemplate, type VariableContext } from "./variables";
 
 /**
@@ -73,7 +73,7 @@ export async function stampHeaderFooter(
 		: fallback && settings.displayFooter
 			? await standardFont()
 			: null;
-	const margins = resolvePrintMarginsMm(settings);
+	const margins = resolveFrameMarginsMm(settings);
 	const pages = doc.getPages();
 	const total = pages.length;
 	for (let index = 0; index < pages.length; index++) {
@@ -89,10 +89,19 @@ export async function stampHeaderFooter(
 		const pageHeightMm = height / mm(1);
 		const contentWidthMm = Math.max(0, width / mm(1) - margins.left - margins.right);
 		if (settings.displayHeader && headerFont) {
-			const headerPt = clampSlotFontSize(settings.header.fontSizePt);
-			if (options?.cover && !fonts.header) coverEdge(page, "header", headerPt);
+			const headerPt = slotFontPt(settings.header.fontSizePx);
+			const headerCover =
+				margins.top + bandHeightMm(settings.header.borderStyle, options?.headerLines, headerPt);
+			if (options?.cover && !fonts.header) coverEdge(page, "header", headerCover);
 			if (fonts.header) {
-				drawEdgeRule(page, height, settings.header, margins.left, contentWidthMm, headerRuleTopMm(headerPt, options?.headerLines));
+				drawEdgeRule(
+					page,
+					height,
+					settings.header,
+					margins.left,
+					contentWidthMm,
+					headerRuleTopMm(margins.top, headerPt, options?.headerLines),
+				);
 			}
 			drawEdge(
 				page,
@@ -100,13 +109,15 @@ export async function stampHeaderFooter(
 				settings.header,
 				pageCtx,
 				margins,
-				height - mm(headerBaselineFromTopMm(headerPt)),
+				height - mm(headerBaselineFromTopMm(headerPt, margins.top)),
 				"header",
 			);
 		}
 		if (settings.displayFooter && footerFont) {
-			const footerPt = clampSlotFontSize(settings.footer.fontSizePt);
-			if (options?.cover && !fonts.footer) coverEdge(page, "footer", footerPt);
+			const footerPt = slotFontPt(settings.footer.fontSizePx);
+			const footerCover =
+				margins.bottom + bandHeightMm(settings.footer.borderStyle, options?.footerLines, footerPt);
+			if (options?.cover && !fonts.footer) coverEdge(page, "footer", footerCover);
 			if (fonts.footer) {
 				drawEdgeRule(
 					page,
@@ -114,7 +125,7 @@ export async function stampHeaderFooter(
 					settings.footer,
 					margins.left,
 					contentWidthMm,
-					footerRuleTopMm(pageHeightMm, footerPt, options?.footerLines, settings.footer.borderStyle),
+					footerRuleTopMm(pageHeightMm, margins.bottom, footerPt, options?.footerLines, settings.footer.borderStyle),
 				);
 			}
 			drawEdge(
@@ -123,7 +134,7 @@ export async function stampHeaderFooter(
 				settings.footer,
 				pageCtx,
 				margins,
-				mm(footerBaselineFromBottomMm(footerPt)),
+				mm(footerBaselineFromBottomMm(footerPt, margins.bottom)),
 				"footer",
 			);
 		}
@@ -131,19 +142,20 @@ export async function stampHeaderFooter(
 	return doc.save();
 }
 
-function headerRuleTopMm(fontSizePt: number, lines: number | undefined): number {
-	return FRAME_INSET_MM + lineMm(fontSizePt) * Math.max(1, lines ?? 1) + TEXT_BORDER_GAP_MM;
+function headerRuleTopMm(marginTopMm: number, fontSizePt: number, lines: number | undefined): number {
+	return marginTopMm + lineMm(fontSizePt) * Math.max(1, lines ?? 1) + TEXT_BORDER_GAP_MM;
 }
 
 function footerRuleTopMm(
 	pageHeightMm: number,
+	marginBottomMm: number,
 	fontSizePt: number,
 	lines: number | undefined,
 	borderStyle: unknown,
 ): number {
 	return (
 		pageHeightMm -
-		FRAME_INSET_MM -
+		marginBottomMm -
 		lineMm(fontSizePt) * Math.max(1, lines ?? 1) -
 		TEXT_BORDER_GAP_MM -
 		borderExtentMm(borderStyle)
@@ -162,9 +174,9 @@ function drawEdgeRule(
 }
 
 /** Cover the running text, and stop short of the border rule. */
-function coverEdge(page: PDFPage, edge: "header" | "footer", fontSizePt: number): void {
+function coverEdge(page: PDFPage, edge: "header" | "footer", coverMm: number): void {
 	const { width, height } = page.getSize();
-	const band = mm(FRAME_INSET_MM + lineMm(fontSizePt) + TEXT_BORDER_GAP_MM * 0.5);
+	const band = mm(coverMm);
 	if (edge === "header") {
 		page.drawRectangle({ x: 0, y: height - band, width, height: band, color: rgb(1, 1, 1) });
 		return;
@@ -186,7 +198,7 @@ function drawEdge(
 	const left = mm(margins.left);
 	const content = Math.max(0, width - mm(margins.left) - mm(margins.right));
 	const color = parseColor(slots.textColor || "#555555");
-	const fontPt = clampSlotFontSize(slots.fontSizePt);
+	const fontPt = slotFontPt(slots.fontSizePx);
 	const lineAdvance = mm(lineMm(fontPt));
 	const widthOf = (sample: string): number | null => {
 		try {

@@ -446,33 +446,43 @@ describe("settings", () => {
 		expect(typeof settings.landscape).toBe("boolean");
 		expect(settings.cheatSheet).toBe(false);
 		expect(settings.cheatSheetDensity).toBe("compact");
-		expect(settings.cheatSheetFontSizePt).toBe(8);
+		expect(settings.bodyFontSizePx).toBe(11);
+		expect(settings.applyBodyFontSize).toBe(false);
 		expect(settings.cheatSheetColumns).toBe(3);
 		expect(settings.cheatSheetUniformText).toBe(true);
 		expect(settings.centerNoteTitle).toBe(false);
 		expect(settings.showProperties).toBe(false);
 		expect(normalizeSettings({ showProperties: true }).showProperties).toBe(true);
 		expect(normalizeSettings({ showProperties: "yes" }).showProperties).toBe(false);
-		expect(settings.header.fontSizePt).toBe(6.75);
-		expect(settings.footer.fontSizePt).toBe(6.75);
+		expect(settings.header.fontSizePx).toBe(9);
+		expect(settings.footer.fontSizePx).toBe(9);
 	});
 
-	it("keeps a missing header or footer size at 6.75 and clamps the rest", () => {
+	it("converts a saved point size to pixels and clamps the typed range", () => {
 		const missing = normalizeSettings({
 			header: { left: "", center: "{{title}}", right: "" },
 			footer: { left: "", center: "", right: "" },
 		});
-		expect(missing.header.fontSizePt).toBe(6.75);
-		expect(missing.footer.fontSizePt).toBe(6.75);
-		const clamped = normalizeSettings({
-			header: { left: "", center: "", right: "", fontSizePt: 99 },
-			footer: { left: "", center: "", right: "", fontSizePt: 3 },
+		expect(missing.header.fontSizePx).toBe(9);
+		expect(missing.footer.fontSizePx).toBe(9);
+		const converted = normalizeSettings({
+			header: { left: "", center: "", right: "", fontSizePt: 6.75 },
+			footer: { left: "", center: "", right: "", fontSizePt: 12 },
 		});
-		expect(clamped.header.fontSizePt).toBe(18);
-		expect(clamped.footer.fontSizePt).toBe(6);
+		expect(converted.header.fontSizePx).toBe(9);
+		expect(converted.footer.fontSizePx).toBe(16);
+		const clamped = normalizeSettings({
+			header: { left: "", center: "", right: "", fontSizePx: 1 },
+			footer: { left: "", center: "", right: "", fontSizePx: 600 },
+		});
+		expect(clamped.header.fontSizePx).toBe(2);
+		expect(clamped.footer.fontSizePx).toBe(512);
+		expect(normalizeSettings({ cheatSheetFontSizePt: 8 }).bodyFontSizePx).toBe(11);
+		expect(normalizeSettings({ cheatSheetFontSizePt: 8 }).applyBodyFontSize).toBe(false);
+		expect(normalizeSettings({ bodyFontSizePx: 20, applyBodyFontSize: true }).applyBodyFontSize).toBe(true);
 	});
 
-	it("accepts header.fontSizePt and footer.fontSizePt from the settings command", async () => {
+	it("accepts header, footer, and body text sizes in pixels from the settings command", async () => {
 		const plugin = {
 			settings: normalizeSettings({}),
 			saveSettings: async () => {},
@@ -481,15 +491,20 @@ describe("settings", () => {
 		const keys = JSON.stringify(tab.getSettingDefinitions());
 		expect(keys).toContain('"key":"showProperties"');
 		expect(keys).toContain("Include note title");
-		expect(keys).toContain('"key":"header.fontSizePt"');
-		expect(keys).toContain('"key":"footer.fontSizePt"');
-		await tab.setControlValue("header.fontSizePt", 14);
-		await tab.setControlValue("footer.fontSizePt", "12");
-		expect(plugin.settings.header.fontSizePt).toBe(14);
-		expect(plugin.settings.footer.fontSizePt).toBe(12);
+		expect(keys).toContain('"key":"header.fontSizePx"');
+		expect(keys).toContain('"key":"footer.fontSizePx"');
+		expect(keys).toContain('"key":"bodyFontSizePx"');
+		expect(keys).toContain("8 to 96");
+		await tab.setControlValue("header.fontSizePx", 14);
+		await tab.setControlValue("footer.fontSizePx", "12");
+		await tab.setControlValue("bodyFontSizePx", 32);
+		expect(plugin.settings.header.fontSizePx).toBe(14);
+		expect(plugin.settings.footer.fontSizePx).toBe(12);
+		expect(plugin.settings.bodyFontSizePx).toBe(32);
+		expect(plugin.settings.applyBodyFontSize).toBe(true);
 	});
 
-	it("clamps cheat sheet text size and density", () => {
+	it("clamps body text size and density", () => {
 		const settings = normalizeSettings({
 			cheatSheet: true,
 			cheatSheetDensity: "continuous",
@@ -498,9 +513,10 @@ describe("settings", () => {
 		});
 		expect(settings.cheatSheet).toBe(true);
 		expect(settings.cheatSheetDensity).toBe("continuous");
-		expect(settings.cheatSheetFontSizePt).toBe(6);
+		expect(settings.bodyFontSizePx).toBe(4);
+		expect(settings.applyBodyFontSize).toBe(false);
 		expect(settings.cheatSheetUniformText).toBe(false);
-		expect(normalizeSettings({ cheatSheetFontSizePt: 40 }).cheatSheetFontSizePt).toBe(14);
+		expect(normalizeSettings({ bodyFontSizePx: 900 }).bodyFontSizePx).toBe(512);
 		expect(normalizeSettings({ cheatSheetDensity: "nope" }).cheatSheetDensity).toBe("compact");
 		expect(clampCheatSheetColumns(1)).toBe(2);
 		expect(clampCheatSheetColumns(2)).toBe(2);
@@ -563,7 +579,8 @@ describe("exam cheat sheet", () => {
 			pageBreakBeforeH1: true,
 			cheatSheet: true,
 			cheatSheetDensity: "compact",
-			cheatSheetFontSizePt: 9,
+			bodyFontSizePx: 12,
+			applyBodyFontSize: true,
 			cheatSheetColumns: 4,
 			landscape: true,
 			cheatSheetUniformText: true,
@@ -573,7 +590,9 @@ describe("exam cheat sheet", () => {
 		expect(el.classList.contains("pagina-cheat-sheet")).toBe(true);
 		expect(el.classList.contains("pagina-cheat-compact")).toBe(true);
 		expect(el.classList.contains("pagina-uniform-text")).toBe(true);
-		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("9pt");
+		expect(el.style.getPropertyValue("--pagina-cheat-font-size")).toBe("12px");
+		expect(el.classList.contains("pagina-body-font")).toBe(true);
+		expect(el.style.getPropertyValue("--pagina-body-font-size")).toBe("12px");
 		expect(el.style.getPropertyValue("--pagina-cheat-columns")).toBe("4");
 		applyH1StyleClasses(el, { centerNoteTitle: true, cheatSheet: true });
 		expect(el.classList.contains("pagina-center-title")).toBe(true);

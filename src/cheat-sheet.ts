@@ -1,11 +1,12 @@
 import type { CheatSheetDensity } from "./types";
-import { clampCheatSheetColumns, clampCheatSheetFontSize } from "./types";
+import { BODY_FONT_DEFAULT_PX, clampCheatSheetColumns, clampTextPx } from "./types";
 
 export interface CheatSheetStyleInput {
 	cheatSheet?: boolean;
 	cheatSheetDensity?: CheatSheetDensity;
 	cheatSheetColumns?: number;
-	cheatSheetFontSizePt?: number;
+	bodyFontSizePx?: number;
+	applyBodyFontSize?: boolean;
 	cheatSheetUniformText?: boolean;
 	landscape?: boolean;
 }
@@ -27,8 +28,9 @@ export function applyCheatSheetClasses(printEl: HTMLElement, settings: CheatShee
 	setClass(printEl, "pagina-cheat-sheet", on);
 	setClass(printEl, "pagina-cheat-compact", on && !continuous);
 	setClass(printEl, "pagina-uniform-text", on && settings.cheatSheetUniformText !== false);
+	const px = clampTextPx(settings.bodyFontSizePx, BODY_FONT_DEFAULT_PX);
 	if (on) {
-		printEl.style.setProperty("--pagina-cheat-font-size", `${clampCheatSheetFontSize(settings.cheatSheetFontSizePt)}pt`);
+		printEl.style.setProperty("--pagina-cheat-font-size", `${px}px`);
 		printEl.style.setProperty(
 			"--pagina-cheat-columns",
 			String(clampCheatSheetColumns(settings.cheatSheetColumns)),
@@ -36,6 +38,13 @@ export function applyCheatSheetClasses(printEl: HTMLElement, settings: CheatShee
 	} else {
 		printEl.style.removeProperty("--pagina-cheat-font-size");
 		printEl.style.removeProperty("--pagina-cheat-columns");
+	}
+	if (settings.applyBodyFontSize) {
+		printEl.style.setProperty("--pagina-body-font-size", `${px}px`);
+		setClass(printEl, "pagina-body-font", true);
+	} else {
+		printEl.style.removeProperty("--pagina-body-font-size");
+		setClass(printEl, "pagina-body-font", false);
 	}
 }
 
