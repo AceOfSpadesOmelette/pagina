@@ -8,7 +8,7 @@ import {
 	downloadSettingsJson,
 	parseSettingsJson,
 } from "./settings-io";
-import { cheatSheetColumnBounds, clampCheatSheetColumns, clampTextPx, clampTitleGapMm, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, TEXT_PX_MAX, TEXT_PX_MIN, TEXT_SIZE_DESC } from "./types";
+import { cheatSheetColumnBounds, clampCheatSheetColumns, clampRuleGapMm, clampTextPx, clampTitleGapMm, DATETIME_FORMATS, type DatetimeFormat, type HeaderFooterSlots, type PaginaSettings, TEXT_PX_MAX, TEXT_PX_MIN, TEXT_SIZE_DESC } from "./types";
 import { VARIABLE_HINT } from "./variables";
 
 export interface NoteTitleField {
@@ -427,6 +427,20 @@ export function renderPaginaSettings(
 			}
 			dd.setValue(settings.sectionHeadingLevel).onChange((v) => {
 				settings.sectionHeadingLevel = v as PaginaSettings["sectionHeadingLevel"];
+				notify();
+			});
+		});
+
+	new Setting(container)
+		.setName("Space before rule")
+		.setDesc("Millimetres between the header or footer text and its line.")
+		.addText((text) => {
+			text.inputEl.type = "number";
+			text.inputEl.min = "0";
+			text.inputEl.step = "0.5";
+			text.setValue(String(settings.ruleGapMm)).onChange((value) => {
+				if (value.trim() === "" || !Number.isFinite(Number(value))) return;
+				settings.ruleGapMm = clampRuleGapMm(value);
 				notify();
 			});
 		});

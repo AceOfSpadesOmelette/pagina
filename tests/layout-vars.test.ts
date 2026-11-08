@@ -5,6 +5,7 @@ import { PaginaSettingTab } from "../src/settings";
 import { applyCheatSheetClasses, applyContinuousText, markCompactSpacers } from "../src/cheat-sheet";
 import { contentBoxHasText } from "../src/blank-page";
 import { sanitizeCssText } from "../src/css-sanitize";
+import { bandHeightMm } from "../src/header-footer-layout";
 import { computePageLayout } from "../src/paginate";
 import { effectiveLandscape, resolvePageSizeMm, validateLayout } from "../src/page-presets";
 import {
@@ -15,7 +16,7 @@ import {
 	PRINT_CSS,
 	shiftWordDeficits,
 } from "../src/print-styles";
-import { applyH1StyleClasses, dropBlankLineBeforeTables, labelCodeBlockLanguages } from "../src/render";
+import { applyH1StyleClasses, dropBlankLineBeforeTables, labelCodeBlockLanguages, separateHeadingBodies } from "../src/render";
 import { isPhoneSession } from "../src/session";
 import { DEFAULT_SETTINGS, clampCheatSheetColumns, normalizeSettings } from "../src/types";
 import { applyOrderedListStarts, orderedListStarts } from "../src/ordered-lists";
@@ -453,6 +454,10 @@ describe("settings", () => {
 		expect(settings.centerNoteTitle).toBe(false);
 		expect(settings.noteTitleGapMm).toBe(0);
 		expect(normalizeSettings({ noteTitleGapMm: -4 }).noteTitleGapMm).toBe(0);
+		expect(settings.ruleGapMm).toBe(0.8);
+		expect(normalizeSettings({ ruleGapMm: -2 }).ruleGapMm).toBe(0);
+		expect(normalizeSettings({ ruleGapMm: 3.24 }).ruleGapMm).toBe(3.2);
+		expect(bandHeightMm("none", 1, 9, 4) - bandHeightMm("none", 1, 9, 0.8)).toBeCloseTo(3.2);
 		expect(normalizeSettings({ noteTitleGapMm: 6.24 }).noteTitleGapMm).toBe(6.2);
 		expect(settings.showProperties).toBe(false);
 		expect(normalizeSettings({ showProperties: true }).showProperties).toBe(true);
@@ -693,12 +698,73 @@ describe("exam cheat sheet", () => {
 		expect(root.querySelector("table td")?.textContent).toBe("a");
 	});
 
+	it("separates a body line from the heading above it", () => {
+		const source = [
+			"###### Filter Cost",
+			"NSM: Cost = B",
+			"DSM: Cost = (Number of Filtered Attributes) × (DSM Pages per Column)",
+			"###### Retrieval Cost",
+			"",
+			"| a | b |",
+			"```",
+			"###### inside",
+			"keep",
+			"```",
+		].join("\n");
+		const lines = separateHeadingBodies(source).split("\n");
+		expect(lines[0]).toBe("###### Filter Cost");
+		expect(lines[1]).toBe("");
+		expect(lines[2]).toBe("NSM: Cost = B");
+		expect(lines[4]).toBe("###### Retrieval Cost");
+		expect(lines.filter((line) => line === "")).toHaveLength(2);
+		const fence = lines.indexOf("```");
+		expect(lines[fence + 1]).toBe("###### inside");
+		expect(lines[fence + 2]).toBe("keep");
+	});
+
+	it("keeps one user break when an empty block beside a table has several", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<p><br><br></p><table><tr><td>a</td></tr></table><p><br><br></p>";
+		dropBlankLineBeforeTables(root);
+		expect([...root.querySelectorAll("p")].map((p) => p.innerHTML)).toEqual(["<br>", "<br>"]);
+	});
+
+	it("leaves a heading and its sentence beside a table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<h6>Filter Cost</h6><p>NSM: Cost = B</p><h6>Retrieval Cost</h6><table><tr><td>a</td></tr></table>";
+		dropBlankLineBeforeTables(root);
+		expect([...root.querySelectorAll("h6")].map((heading) => heading.textContent)).toEqual([
+			"Filter Cost",
+			"Retrieval Cost",
+		]);
+		expect(root.querySelector("p")?.textContent).toBe("NSM: Cost = B");
+		expect(root.querySelector("table td")?.textContent).toBe("a");
+	});
+
+	it("removes only the empty paragraph that touches the table", () => {
+		const root = document.createElement("div");
+		root.innerHTML = "<p><br></p><p><br></p><table><tr><td>a</td></tr></table><p><br></p><p><br></p>";
+		dropBlankLineBeforeTables(root);
+		expect([...root.querySelectorAll("p")].map((p) => p.innerHTML)).toEqual(["<br>", "<br>"]);
+	});
+
 	it("marks a paragraph that is only a line break", () => {
 		const root = document.createElement("div");
 		root.innerHTML = "<p>kept</p><p><br></p><p>also</p>";
 		markCompactSpacers(root);
 		expect(root.querySelector("p.pagina-spacer-line")?.innerHTML).toBe("<br>");
 		expect(root.querySelectorAll("p.pagina-spacer-line")).toHaveLength(1);
+	});
+
+	it("keeps a paragraph that has text and one line break", () => {
+		const root = document.createElement("div");
+		root.innerHTML =
+			"<p>NSM: Cost = B<br>DSM: Cost = (Number of Filtered Attributes) × (DSM Pages per Column)</p><p><br></p>";
+		markCompactSpacers(root);
+		const paragraphs = [...root.querySelectorAll("p")];
+		expect(paragraphs[0]?.classList.contains("pagina-spacer-line")).toBe(false);
+		expect(paragraphs[0]?.textContent).toContain("NSM: Cost = B");
+		expect(paragraphs[1]?.classList.contains("pagina-spacer-line")).toBe(true);
 	});
 
 	it("labels a fence language at the top-right of the code block", () => {

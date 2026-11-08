@@ -73,6 +73,8 @@ export interface PaginaSettings {
 	centerNoteTitle: boolean;
 	/** Millimetres between the header and the note title. Does not move body headings. */
 	noteTitleGapMm: number;
+	/** Millimetres between header or footer text and its rule. */
+	ruleGapMm: number;
 	/** Print the note's properties under the title. */
 	showProperties: boolean;
 	/** Start a new PDF page at each body H1 (excludes the file-name title). */
@@ -126,6 +128,7 @@ export const DEFAULT_SETTINGS: PaginaSettings = {
 	includeFileNameAsTitle: true,
 	centerNoteTitle: false,
 	noteTitleGapMm: 0,
+	ruleGapMm: 0.8,
 	showProperties: false,
 	pageBreakBeforeH1: false,
 	centerH1: false,
@@ -204,6 +207,7 @@ export function normalizeSettings(raw: unknown): PaginaSettings {
 		pageBreakBeforeH1: data.pageBreakBeforeH1 ?? DEFAULT_SETTINGS.pageBreakBeforeH1,
 		centerNoteTitle: data.centerNoteTitle ?? DEFAULT_SETTINGS.centerNoteTitle,
 		noteTitleGapMm: clampTitleGapMm(data.noteTitleGapMm),
+		ruleGapMm: clampRuleGapMm(data.ruleGapMm),
 		showProperties: data.showProperties === true,
 		centerH1: data.centerH1 ?? DEFAULT_SETTINGS.centerH1,
 		underlineH1: data.underlineH1 ?? DEFAULT_SETTINGS.underlineH1,
@@ -278,6 +282,22 @@ export function migratedTextPx(px: unknown, legacyPt: unknown, fallback: number)
 	if (px != null && px !== "") return clampTextPx(px, fallback);
 	if (legacyPt != null && legacyPt !== "") return clampTextPx(ptToPx(Number(legacyPt)), fallback);
 	return fallback;
+}
+
+/** Default millimetres between header or footer text and its rule. */
+export const RULE_GAP_DEFAULT_MM = 0.8;
+
+/** Space between header or footer text and its rule. A missing value keeps the default. */
+export function clampRuleGapMm(value: unknown): number {
+	if (value == null || value === "") return RULE_GAP_DEFAULT_MM;
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string" && value.trim() !== ""
+				? Number(value)
+				: Number.NaN;
+	if (!Number.isFinite(parsed) || parsed < 0) return 0;
+	return Math.round(parsed * 10) / 10;
 }
 
 /** Space above the note title. Negative values become 0. */

@@ -55,6 +55,34 @@ function injectBlockIds(app: App, file: TFile, markdown: string): string {
 	return lines.join("\n");
 }
 
+const HEADING_LINE = /^#{1,6}\s+\S/;
+const FENCE_LINE = /^\s*(```|~~~)/;
+const MATH_FENCE_LINE = /^\s*\$\$\s*$/;
+
+/**
+ * Obsidian glues a body line into the heading when no blank line separates them.
+ * Insert that blank line in the export copy so the body stays its own paragraph.
+ * Fences, a following heading, and a blank line that is already there are left alone.
+ */
+export function separateHeadingBodies(markdown: string): string {
+	const lines = markdown.split("\n");
+	let fenced = false;
+	const out: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i] ?? "";
+		out.push(line);
+		if (FENCE_LINE.test(line) || MATH_FENCE_LINE.test(line)) {
+			fenced = !fenced;
+			continue;
+		}
+		if (fenced || !HEADING_LINE.test(line)) continue;
+		const next = lines[i + 1];
+		if (next == null || next.trim() === "" || HEADING_LINE.test(next)) continue;
+		out.push("");
+	}
+	return out.join("\n");
+}
+
 async function waitForDomChange(el: HTMLElement, timeout = 2000): Promise<void> {
 	return new Promise((resolve) => {
 		let settled = false;
@@ -968,9 +996,18 @@ function blankText(value: string | null): string {
 	return (value ?? "").replace(/\u00a0/g, " ").trim();
 }
 
-function isBlankBlock(el: Element): boolean {
-	if (el.matches("table, .el-table")) return false;
-	return blankText(el.textContent).length === 0;
+/** A paragraph, or a wrapper whose children are only paragraphs and breaks. */
+function isParagraphBlock(el: Element): boolean {
+	if (el.matches("p")) return true;
+	const children = [...el.children];
+	return children.length > 0 && children.every((child) => child.matches("p, br"));
+}
+
+/** A paragraph that holds nothing but breaks. Headings, lists, and text stay. */
+function isBreakOnlyParagraph(el: Element): boolean {
+	if (!isParagraphBlock(el)) return false;
+	if (blankText(el.textContent).length > 0) return false;
+	return [...el.querySelectorAll("*")].every((node) => node.tagName === "BR");
 }
 
 /** The paragraph that holds a trailing break, when the block is that paragraph or wraps one. */
@@ -1002,32 +1039,40 @@ function stripLeadingBreak(el: Element): void {
 }
 
 /**
- * Drop a blank line that touches a table. Above it, that is an empty block or a
- * trailing break. Below it, an empty block or a leading break. A blank line
- * that does not touch the table stays.
+ * Drop one blank line touching a table. An empty block with several breaks loses
+ * only the break closest to the table. A block with one break is Obsidian's line
+ * and is removed. Further blank lines stay.
+ */
+function dropOneBlank(el: Element, edge: "start" | "end"): void {
+	if (!isParagraphBlock(el)) return;
+	if (!isBreakOnlyParagraph(el)) {
+		const paragraph = paragraphOf(el);
+		if (blankText(paragraph.textContent).length === 0) return;
+		if (edge === "end") stripTrailingBreak(paragraph);
+		else stripLeadingBreak(paragraph);
+		return;
+	}
+	const breaks = [...el.querySelectorAll("br")];
+	const closest = edge === "end" ? breaks[breaks.length - 1] : breaks[0];
+	if (breaks.length > 1 && closest) {
+		closest.remove();
+		return;
+	}
+	el.remove();
+}
+
+/**
+ * Drop the one Obsidian blank line above a table and the one below it.
+ * Extra blank lines the user added on either side stay.
  */
 export function dropBlankLineBeforeTables(root: ParentNode): void {
 	const tables = [...root.querySelectorAll("table")].filter((table) => !table.parentElement?.closest("table"));
 	for (const table of tables) {
 		const block = table.closest(".el-table") ?? table;
 		const prev = block.previousElementSibling;
-		if (prev) {
-			if (isBlankBlock(prev)) {
-				prev.remove();
-			} else {
-				const paragraph = paragraphOf(prev);
-				if (blankText(paragraph.textContent).length > 0) stripTrailingBreak(paragraph);
-			}
-		}
+		if (prev) dropOneBlank(prev, "end");
 		const next = block.nextElementSibling;
-		if (!next) continue;
-		if (isBlankBlock(next)) {
-			next.remove();
-			continue;
-		}
-		const following = paragraphOf(next);
-		if (blankText(following.textContent).length === 0) continue;
-		stripLeadingBreak(following);
+		if (next) dropOneBlank(next, "start");
 	}
 }
 
@@ -1038,7 +1083,7 @@ export function dropBlankLineBeforeTables(root: ParentNode): void {
 export async function renderNoteForExport(opts: RenderNoteOptions): Promise<RenderedNote> {
 	const { app, file, includeTitle } = opts;
 	const raw = await app.vault.cachedRead(file);
-	const markdown = injectBlockIds(app, file, raw);
+	const markdown = separateHeadingBodies(injectBlockIds(app, file, raw));
 	const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter ?? ({});
 	const component = new Component();
 	component.load();

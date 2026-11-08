@@ -54,10 +54,10 @@ export function computePageLayout(
 	});
 
 	const headerBandMm = settings.displayHeader
-		? bandHeightMm(settings.header.borderStyle, headerLines, slotFontPt(settings.header.fontSizePx))
+		? bandHeightMm(settings.header.borderStyle, headerLines, slotFontPt(settings.header.fontSizePx), settings.ruleGapMm)
 		: 0;
 	const footerBandMm = settings.displayFooter
-		? bandHeightMm(settings.footer.borderStyle, footerLines, slotFontPt(settings.footer.fontSizePx))
+		? bandHeightMm(settings.footer.borderStyle, footerLines, slotFontPt(settings.footer.fontSizePx), settings.ruleGapMm)
 		: 0;
 
 	const contentWidthMm = Math.max(1, page.width - margins.left - margins.right);

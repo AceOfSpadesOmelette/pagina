@@ -292,7 +292,10 @@ ${LIGHT_PRINT_SURFACE_CSS}
   text-align: center;
 }
 .print.pagina-print.pagina-underline-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+  --pagina-h1-underline: max(1px, 0.08em);
   text-decoration: underline;
+  text-decoration-thickness: var(--pagina-h1-underline);
+  padding-bottom: var(--pagina-h1-underline);
 }
 .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
   display: none;
@@ -395,7 +398,10 @@ ${LIGHT_PRINT_SURFACE_CSS}
     text-align: center;
   }
   .print.pagina-print.pagina-underline-h1 h1:not(.__title__):not(.conspectus-toc-title) {
+    --pagina-h1-underline: max(1px, 0.08em);
     text-decoration: underline;
+    text-decoration-thickness: var(--pagina-h1-underline);
+    padding-bottom: var(--pagina-h1-underline);
   }
   .print.pagina-print .conspectus-toc.conspectus-toc-hide-export {
     display: none;

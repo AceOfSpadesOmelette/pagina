@@ -48,9 +48,10 @@ export function applyCheatSheetClasses(printEl: HTMLElement, settings: CheatShee
 	}
 }
 
-/** Compact cheat sheets hide a paragraph whose only element is a line break. */
+/** Compact cheat sheets hide a paragraph that is only a line break. Text with a soft break stays. */
 export function markCompactSpacers(root: ParentNode): void {
 	root.querySelectorAll("p").forEach((node) => {
+		if ((node.textContent ?? "").replace(/\u00a0/g, " ").trim().length > 0) return;
 		const elements = [...node.children];
 		if (elements.length === 1 && elements[0]?.tagName === "BR") node.classList.add("pagina-spacer-line");
 	});

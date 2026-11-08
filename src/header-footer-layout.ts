@@ -1,5 +1,5 @@
 import { borderExtentMm } from "./header-borders";
-import { SLOT_FONT_DEFAULT_PT } from "./types";
+import { RULE_GAP_DEFAULT_MM, SLOT_FONT_DEFAULT_PT } from "./types";
 
 /** Chromium's header and footer frames start this far inside the page edge. */
 export const FRAME_INSET_MM = 5.1;
@@ -28,7 +28,7 @@ export const EM_MM = emMm();
 export const DESCENDER_MM = descenderMm();
 export const LINE_MM = lineMm();
 /** Space between the text and its border. */
-export const TEXT_BORDER_GAP_MM = 0.8;
+export const TEXT_BORDER_GAP_MM = RULE_GAP_DEFAULT_MM;
 
 /** Header baseline, measured from the top of the page. `marginTopMm` is the empty frame. */
 export function headerBaselineFromTopMm(fontSizePt = SLOT_FONT_DEFAULT_PT, marginTopMm = 0): number {
@@ -42,9 +42,15 @@ export function footerBaselineFromBottomMm(fontSizePt = SLOT_FONT_DEFAULT_PT, ma
 /** Space between the border and the note body. */
 export const CLEARANCE_MM = 1.0;
 
-export function bandHeightMm(borderStyle: string | undefined, lines = 1, fontSizePt = SLOT_FONT_DEFAULT_PT): number {
+export function bandHeightMm(
+	borderStyle: string | undefined,
+	lines = 1,
+	fontSizePt = SLOT_FONT_DEFAULT_PT,
+	gapMm = TEXT_BORDER_GAP_MM,
+): number {
 	const count = Math.max(1, lines);
-	return lineMm(fontSizePt) * count + TEXT_BORDER_GAP_MM + borderExtentMm(borderStyle);
+	const gap = Number.isFinite(gapMm) && gapMm >= 0 ? gapMm : TEXT_BORDER_GAP_MM;
+	return lineMm(fontSizePt) * count + gap + borderExtentMm(borderStyle);
 }
 
 export function requiredMarginMm(borderStyle: string | undefined, lines = 1, fontSizePt = SLOT_FONT_DEFAULT_PT): number {

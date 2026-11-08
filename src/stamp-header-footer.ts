@@ -1,7 +1,7 @@
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib";
 import { borderExtentMm, drawBorderBand } from "./header-borders";
-import { bandHeightMm, footerBaselineFromBottomMm, headerBaselineFromTopMm, lineMm, TEXT_BORDER_GAP_MM } from "./header-footer-layout";
+import { bandHeightMm, footerBaselineFromBottomMm, headerBaselineFromTopMm, lineMm } from "./header-footer-layout";
 import { resolveFrameMarginsMm } from "./page-presets";
 import { slotSpansForTexts, wrapSlotText } from "./slot-wrap";
 import { slotFontPt, type HeaderFooterSlots, type PaginaSettings } from "./types";
@@ -91,7 +91,7 @@ export async function stampHeaderFooter(
 		if (settings.displayHeader && headerFont) {
 			const headerPt = slotFontPt(settings.header.fontSizePx);
 			const headerCover =
-				margins.top + bandHeightMm(settings.header.borderStyle, options?.headerLines, headerPt);
+				margins.top + bandHeightMm(settings.header.borderStyle, options?.headerLines, headerPt, settings.ruleGapMm);
 			if (options?.cover && !fonts.header) coverEdge(page, "header", headerCover);
 			if (fonts.header) {
 				drawEdgeRule(
@@ -100,7 +100,7 @@ export async function stampHeaderFooter(
 					settings.header,
 					margins.left,
 					contentWidthMm,
-					headerRuleTopMm(margins.top, headerPt, options?.headerLines),
+					headerRuleTopMm(margins.top, headerPt, options?.headerLines, settings.ruleGapMm),
 				);
 			}
 			drawEdge(
@@ -116,7 +116,7 @@ export async function stampHeaderFooter(
 		if (settings.displayFooter && footerFont) {
 			const footerPt = slotFontPt(settings.footer.fontSizePx);
 			const footerCover =
-				margins.bottom + bandHeightMm(settings.footer.borderStyle, options?.footerLines, footerPt);
+				margins.bottom + bandHeightMm(settings.footer.borderStyle, options?.footerLines, footerPt, settings.ruleGapMm);
 			if (options?.cover && !fonts.footer) coverEdge(page, "footer", footerCover);
 			if (fonts.footer) {
 				drawEdgeRule(
@@ -125,7 +125,7 @@ export async function stampHeaderFooter(
 					settings.footer,
 					margins.left,
 					contentWidthMm,
-					footerRuleTopMm(pageHeightMm, margins.bottom, footerPt, options?.footerLines, settings.footer.borderStyle),
+					footerRuleTopMm(pageHeightMm, margins.bottom, footerPt, options?.footerLines, settings.footer.borderStyle, settings.ruleGapMm),
 				);
 			}
 			drawEdge(
@@ -142,8 +142,8 @@ export async function stampHeaderFooter(
 	return doc.save();
 }
 
-function headerRuleTopMm(marginTopMm: number, fontSizePt: number, lines: number | undefined): number {
-	return marginTopMm + lineMm(fontSizePt) * Math.max(1, lines ?? 1) + TEXT_BORDER_GAP_MM;
+function headerRuleTopMm(marginTopMm: number, fontSizePt: number, lines: number | undefined, gapMm: number): number {
+	return marginTopMm + lineMm(fontSizePt) * Math.max(1, lines ?? 1) + gapMm;
 }
 
 function footerRuleTopMm(
@@ -152,12 +152,13 @@ function footerRuleTopMm(
 	fontSizePt: number,
 	lines: number | undefined,
 	borderStyle: unknown,
+	gapMm: number,
 ): number {
 	return (
 		pageHeightMm -
 		marginBottomMm -
 		lineMm(fontSizePt) * Math.max(1, lines ?? 1) -
-		TEXT_BORDER_GAP_MM -
+		gapMm -
 		borderExtentMm(borderStyle)
 	);
 }

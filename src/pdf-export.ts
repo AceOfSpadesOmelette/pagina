@@ -9,7 +9,6 @@ import {
 	footerBaselineFromBottomMm,
 	headerBaselineFromTopMm,
 	lineMm,
-	TEXT_BORDER_GAP_MM,
 } from "./header-footer-layout";
 import { effectiveLandscape, layoutWarning, resolveFrameMarginsMm, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { fitStampedImages } from "./image-fit";
@@ -775,6 +774,7 @@ async function appendPrintBand(
 	slots: PaginaSettings["header"],
 	ctx: VariableContext,
 	contentWidthMm: number,
+	gapMm: number,
 ): Promise<void> {
 	if (!slots.left && !slots.center && !slots.right) return;
 	const band = createDiv({ cls: `pagina-run-${kind}` });
@@ -785,8 +785,14 @@ async function appendPrintBand(
 	if (face) band.style.fontFamily = face;
 	if (slots.borderStyle && slots.borderStyle !== "none") {
 		const border = `1px solid ${slots.borderColor || "#000000"}`;
-		if (kind === "header") band.style.borderBottom = border;
-		else band.style.borderTop = border;
+		const gap = `${gapMm}mm`;
+		if (kind === "header") {
+			band.style.borderBottom = border;
+			band.style.paddingBottom = gap;
+		} else {
+			band.style.borderTop = border;
+			band.style.paddingTop = gap;
+		}
 	}
 	const measureCtx: VariableContext = { ...ctx, page: 999, pages: 999, datetimeFormat: slots.datetimeFormat };
 	const texts = (["left", "center", "right"] as const).map((align) =>
@@ -822,8 +828,8 @@ async function mountPrintFrame(
 	const sheet = new CSSStyleSheet();
 	sheet.replaceSync(css);
 	doc.adoptedStyleSheets = [sheet];
-	if (settings.displayHeader) await appendPrintBand(doc, "header", settings.header, ctx, contentWidthMm);
-	if (settings.displayFooter) await appendPrintBand(doc, "footer", settings.footer, ctx, contentWidthMm);
+	if (settings.displayHeader) await appendPrintBand(doc, "header", settings.header, ctx, contentWidthMm, settings.ruleGapMm);
+	if (settings.displayFooter) await appendPrintBand(doc, "footer", settings.footer, ctx, contentWidthMm, settings.ruleGapMm);
 }
 
 function waitForPrintImages(doc: Document): Promise<void> {
@@ -947,7 +953,7 @@ function drawHeaderFooter(
 				settings.header.borderStyle,
 				settings.header.borderColor,
 				contentLeft,
-				frameTop + lineMm(headerPt) * layout.headerLines + TEXT_BORDER_GAP_MM,
+				frameTop + lineMm(headerPt) * layout.headerLines + settings.ruleGapMm,
 				contentWidth,
 			);
 		}
@@ -963,7 +969,7 @@ function drawHeaderFooter(
 				settings.footer.borderStyle,
 				settings.footer.borderColor,
 				contentLeft,
-				layout.pageHeightMm - frameBottom - lineMm(footerPt) * layout.footerLines - TEXT_BORDER_GAP_MM - borderMm,
+				layout.pageHeightMm - frameBottom - lineMm(footerPt) * layout.footerLines - settings.ruleGapMm - borderMm,
 				contentWidth,
 			);
 		}

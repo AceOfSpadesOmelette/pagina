@@ -3,7 +3,7 @@ import os from "os";
 import path from "path";
 import electron from "electron";
 import { borderExtentMm, borderSvg } from "./header-borders";
-import { emMm, lineMm, TEXT_BORDER_GAP_MM, mmToCssPx } from "./header-footer-layout";
+import { emMm, lineMm, mmToCssPx } from "./header-footer-layout";
 import { slotFontPt, type PaginaSettings, type TimestampFormat } from "./types";
 import { effectiveLandscape, layoutWarning, resolvePageSizeMm, resolvePrintMarginsMm } from "./page-presets";
 import { slotSpansForTexts } from "./slot-wrap";
@@ -221,6 +221,7 @@ function headerFooterHtml(
 	omitRule: boolean,
 	lines: number,
 	contentWidthPx: number,
+	gapMm: number,
 ): string {
 	const left = omitText ? "" : chromiumSlot(slots.left, ctx, slots.datetimeFormat);
 	const center = omitText ? "" : chromiumSlot(slots.center, ctx, slots.datetimeFormat);
@@ -232,7 +233,7 @@ function headerFooterHtml(
 	const linePx = mmToCssPx(lineMm(fontPt));
 	const rowPx = mmToCssPx(lineMm(fontPt) * Math.max(1, lines));
 	const emPx = mmToCssPx(emMm(fontPt));
-	const gapPx = mmToCssPx(TEXT_BORDER_GAP_MM);
+	const gapPx = mmToCssPx(gapMm);
 	const borderPx = mmToCssPx(borderExtentMm(slots.borderStyle));
 	// Pack the band against the note, leaving the entered margin empty at the page edge.
 	const justify = edge === "header" ? "flex-end" : "flex-start";
@@ -343,6 +344,7 @@ export function makeElectronPrintOptions(
 					Boolean(extras?.headerOmitRule),
 					Math.max(1, extras?.headerLines ?? 1),
 					contentWidthPx,
+					settings.ruleGapMm,
 				)
 			: "<span></span>",
 		footerTemplate: settings.displayFooter
@@ -357,6 +359,7 @@ export function makeElectronPrintOptions(
 					Boolean(extras?.footerOmitRule),
 					Math.max(1, extras?.footerLines ?? 1),
 					contentWidthPx,
+					settings.ruleGapMm,
 				)
 			: "<span></span>",
 	};

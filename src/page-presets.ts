@@ -130,6 +130,8 @@ export interface LayoutInput {
 	displayFooter?: boolean;
 	header?: { borderStyle?: string; lines?: number; fontSizePx?: number };
 	footer?: { borderStyle?: string; lines?: number; fontSizePx?: number };
+	/** Millimetres between header or footer text and its rule. */
+	ruleGapMm?: number;
 }
 
 /** The empty paper the user entered. Header, footer, and body sit inside it. */
@@ -159,10 +161,10 @@ export function resolvePrintMarginsMm(input: LayoutInput): {
 } {
 	const frame = resolveFrameMarginsMm(input);
 	const headerBand = input.displayHeader
-		? bandHeightMm(input.header?.borderStyle, input.header?.lines ?? 1, slotFontPt(input.header?.fontSizePx))
+		? bandHeightMm(input.header?.borderStyle, input.header?.lines ?? 1, slotFontPt(input.header?.fontSizePx), input.ruleGapMm)
 		: 0;
 	const footerBand = input.displayFooter
-		? bandHeightMm(input.footer?.borderStyle, input.footer?.lines ?? 1, slotFontPt(input.footer?.fontSizePx))
+		? bandHeightMm(input.footer?.borderStyle, input.footer?.lines ?? 1, slotFontPt(input.footer?.fontSizePx), input.ruleGapMm)
 		: 0;
 	return {
 		top: frame.top + headerBand,

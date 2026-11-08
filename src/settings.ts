@@ -14,6 +14,7 @@ import {
 	cheatSheetColumnChoices,
 	clampCheatSheetColumns,
 	clampTextPx,
+	clampRuleGapMm,
 	clampTitleGapMm,
 	DATETIME_FORMATS,
 	type DatetimeFormat,
@@ -119,6 +120,11 @@ export class PaginaSettingTab extends PluginSettingTab {
 		}
 		if (key === "noteTitleGapMm") {
 			settings.noteTitleGapMm = clampTitleGapMm(value);
+			await this.plugin.saveSettings();
+			return;
+		}
+		if (key === "ruleGapMm") {
+			settings.ruleGapMm = clampRuleGapMm(value);
 			await this.plugin.saveSettings();
 			return;
 		}
@@ -372,6 +378,11 @@ export class PaginaSettingTab extends PluginSettingTab {
 						name: "Display header",
 						desc: VARIABLE_HINT,
 						control: { type: "toggle", key: "displayHeader" },
+					},
+					{
+						name: "Space before rule",
+						desc: "Millimetres between the header or footer text and its line.",
+						control: { type: "number", key: "ruleGapMm", min: 0, step: 0.5 },
 					},
 					...this.slotDefinitions("header", "Header"),
 				],
