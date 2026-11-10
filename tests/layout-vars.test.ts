@@ -574,6 +574,9 @@ describe("exam cheat sheet", () => {
 			"page-break-after: avoid",
 			"padding: 0",
 			"pagina-cheat-sheet hr",
+			"--icon-size: 1em",
+			".callout-icon .svg-icon",
+			"padding: 0.2em 0.45em",
 		]) {
 			expect(CHEAT_SHEET_CSS).toContain(marker);
 			expect(PRINT_CSS).toContain(marker);

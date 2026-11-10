@@ -691,6 +691,43 @@ img.__canvas__ {
 .print.pagina-print.pagina-cheat-sheet .pagina-run-heading {
 	font-weight: 700;
 }
+/* Obsidian sizes callout padding and icons in UI pixels. Tie them to the sheet font. */
+.print.pagina-print.pagina-cheat-sheet .callout {
+	--callout-padding: 0.2em 0.45em;
+	--callout-title-padding: 0;
+	--callout-content-padding: 0;
+	--callout-title-size: 1em;
+	--callout-radius: 0.25em;
+	--icon-size: 1em;
+	--icon-xs: 1em;
+	--icon-s: 1em;
+	--icon-m: 1em;
+	--icon-l: 1em;
+	padding: 0.2em 0.45em;
+	border-radius: 0.25em;
+	font-size: 1em;
+	line-height: 1.05;
+}
+.print.pagina-print.pagina-cheat-sheet .callout-title {
+	gap: 0.3em;
+	padding: 0;
+	font-size: 1em;
+	line-height: 1.05;
+	align-items: center;
+}
+.print.pagina-print.pagina-cheat-sheet .callout-content {
+	padding: 0;
+}
+.print.pagina-print.pagina-cheat-sheet .callout-icon,
+.print.pagina-print.pagina-cheat-sheet .callout-fold {
+	height: 1em;
+	min-width: 1em;
+}
+.print.pagina-print.pagina-cheat-sheet .callout-icon .svg-icon,
+.print.pagina-print.pagina-cheat-sheet .callout-fold .svg-icon {
+	width: 1em;
+	height: 1em;
+}
 
 .pagina-parked-print {
 	position: absolute;
